@@ -81,20 +81,14 @@ class PlaywrightTabController(ActionStateMixin):
 
         self._since: dict[str, Any] = {}
         self._scrape_running = False
-        # Bus subscriptions for button-state management. Mirrors the
-        # API tab: SCRAPE_STARTED disables Scrape / Resume / Fetch-new
-        # and enables Stop; SCRAPE_COMPLETED / SCRAPE_FAILED restore
-        # buttons and enable Export when reviews are available.
-        self._bus_subs_state: list[tuple[str, Callable[..., None]]] = [
-            (self.pw_wf.SCRAPE_STARTED,
-             lambda **kw: self._on_scrape_started(**kw)),
-            (self.pw_wf.SCRAPE_COMPLETED,
-             lambda **kw: self._on_scrape_completed(**kw)),
-            (self.pw_wf.SCRAPE_FAILED,
-             lambda **kw: self._on_scrape_failed(**kw)),
-        ]
-        for event, cb in self._bus_subs_state:
-            bus.subscribe(event, cb)
+        # Wire button-state management to the workflow's bus events
+        # (shared mixin; same logic as the API tab).
+        self.install_action_state_bus(
+            started_event=self.pw_wf.SCRAPE_STARTED,
+            completed_event=self.pw_wf.SCRAPE_COMPLETED,
+            failed_event=self.pw_wf.SCRAPE_FAILED,
+            source="pw",
+        )
         self._build()
         bus.subscribe(self.pw_wf.DEP_STATUS_CHANGED, self._on_dep_status)
 
@@ -193,6 +187,7 @@ class PlaywrightTabController(ActionStateMixin):
 
     def _bind_shortcuts(self) -> None:
         self.master.bind_all("<Control-p>", lambda _e: self._on_scrape())
+        self.master.bind_all("<Control-Shift-p>", lambda _e: self._on_fetch_new())
         self.master.bind_all("<Control-r>", lambda _e: self._on_resume())
 
     # ---- log / progress / clock -------------------------------------

@@ -9,6 +9,11 @@ runs off the visible tab area.
 Returned are the key button handles (:class:`ApiActionRefs`) so the
 controller can enable / disable / rewire them in response to bus
 events (fetch started, completed, failed, ...).
+
+The Export button text toggles between **"Export to .md"** (only
+the markdown export will be produced) and **"Generate all"** (any
+of CSV / JSON / Per-lang is enabled, so the user should know the
+button now produces multiple files).
 """
 from __future__ import annotations
 
@@ -18,6 +23,14 @@ import customtkinter as ctk
 
 from ._responsive import WrapFrame
 from .tooltip import ToolTip
+
+
+# Button text shown on the Export button depending on what's
+# selected. When any of CSV / JSON / Per-lang is on, switch to the
+# action-call "Generate all" so the user isn't surprised by extra
+# files appearing next to the .md.
+_EXPORT_BASE_TEXT = "Export to .md"
+_EXPORT_GENERATE_ALL_TEXT = "Generate all"
 
 
 class ApiActionRefs:
@@ -134,12 +147,14 @@ def build_api_action_bar(
 
     # ---- Output + analytics row --------------------------------------
     refs.export_btn = ctk.CTkButton(
-        wrap, text="Export to .md", command=on_export,
+        wrap, text=_EXPORT_BASE_TEXT, command=on_export,
         width=130, fg_color="#2d7a2d",
     )
     wrap.add(refs.export_btn)
     refs.export_btn.configure(state="disabled")
-    ToolTip(refs.export_btn, "Save fetched reviews (Ctrl+E).")
+    ToolTip(refs.export_btn,
+            "Save fetched reviews (Ctrl+E). Generates .md always; "
+            "also CSV / JSON / per-language files when those checkboxes are on.")
 
     open_store = ctk.CTkButton(
         wrap, text="Open store page", command=actions.open_store, width=140,
@@ -196,8 +211,32 @@ def build_api_action_bar(
         wrap, text="⚙ Settings", width=110,
         command=actions.open_settings, fg_color="#444",
     )
-    # Right-pinned: appears on the right of the last row.
     wrap.add(settings, side="right")
+
+    # ---- Live button-text sync ---------------------------------------
+    # Whenever any of the also-export checkboxes flips, refresh the
+    # Export button text. ``trace_add`` callbacks fire on the Tk
+    # event loop, so this is safe across threads (Tk serialises
+    # them onto the main thread).
+
+    def _refresh_export_text(*_args: Any) -> None:
+        btn = refs.export_btn
+        if btn is None:
+            return
+        wants_extra = (
+            csv_var.get() == "1"
+            or json_var.get() == "1"
+            or per_lang_var.get() == "1"
+        )
+        btn.configure(
+            text=_EXPORT_GENERATE_ALL_TEXT
+            if wants_extra else _EXPORT_BASE_TEXT,
+        )
+
+    csv_var.trace_add("write", _refresh_export_text)
+    json_var.trace_add("write", _refresh_export_text)
+    per_lang_var.trace_add("write", _refresh_export_text)
+    _refresh_export_text()  # initial label
 
     return refs
 

@@ -5,6 +5,11 @@ under the 500-line hard limit. Builds the action-bar buttons inside
 a :class:`WrapFrame` so the bar wraps to a new row when the current
 window is too narrow — no element ever runs off the visible tab
 area.
+
+The Export button text toggles between **"Export to .md"** (only
+the markdown export will be produced) and **"Generate all"** (any
+of CSV / JSON / Per-lang is enabled, so the user should know the
+button now produces multiple files).
 """
 from __future__ import annotations
 
@@ -15,6 +20,11 @@ import customtkinter as ctk
 
 from ._responsive import WrapFrame
 from .tooltip import ToolTip
+
+
+# Shared text labels for the Export button (mirrors _api_action_bar).
+_EXPORT_BASE_TEXT = "Export to .md"
+_EXPORT_GENERATE_ALL_TEXT = "Generate all"
 
 
 @dataclass
@@ -42,19 +52,13 @@ def build_pw_action_bar(
     per_lang_var: ctk.StringVar,
     split_var: ctk.StringVar,
 ) -> PwActionRefs:
-    """Construct the Playwright tab action bar with auto-wrapping rows.
-
-    The :class:`WrapFrame` reflows on resize. When the tab is narrow,
-    right-most buttons wrap to a new row automatically — nothing
-    falls off-screen.
-    """
+    """Construct the Playwright tab action bar with auto-wrapping rows."""
     sec_act = ctk.CTkFrame(parent, fg_color="transparent")
     sec_act.pack(fill="x", padx=8, pady=(4, 4))
     wrap = WrapFrame(sec_act, padx=4, pady=4, row_gap=2)
     wrap.pack(fill="x")
     refs = PwActionRefs()
 
-    # ---- Scrape / stop / export / cache ------------------------------
     refs.scrape_btn = ctk.CTkButton(
         wrap, text="▶ Start Browser Scrape", fg_color="#8a5a00",
         command=on_scrape, width=210,
@@ -76,7 +80,7 @@ def build_pw_action_bar(
     )
     wrap.add(refs.fetch_new_btn)
     refs.fetch_new_btn.configure(state="disabled")
-    ToolTip(refs.fetch_new_btn, "Scrape + dedup + auto-export.")
+    ToolTip(refs.fetch_new_btn, "Scrape + dedup + auto-export (Ctrl+Shift+P).")
 
     refs.stop_btn = ctk.CTkButton(
         wrap, text="■ Stop", command=on_stop, width=80,
@@ -87,19 +91,20 @@ def build_pw_action_bar(
     ToolTip(refs.stop_btn, "Stop the current scrape.")
 
     refs.export_btn = ctk.CTkButton(
-        wrap, text="Export to .md", command=on_export,
+        wrap, text=_EXPORT_BASE_TEXT, command=on_export,
         width=130, fg_color="#2d7a2d",
     )
     wrap.add(refs.export_btn)
     refs.export_btn.configure(state="disabled")
-    ToolTip(refs.export_btn, "Save the scraped reviews as a Markdown file.")
+    ToolTip(refs.export_btn,
+            "Save scraped reviews as Markdown (Ctrl+E). Generates .md always; "
+            "also CSV / JSON / per-language files when those checkboxes are on.")
 
     open_cache = ctk.CTkButton(
         wrap, text="📂 Open cache", command=on_open_cache, width=120,
     )
     wrap.add(open_cache)
 
-    # ---- Also-export + split -----------------------------------------
     also_frame = ctk.CTkFrame(wrap, fg_color="transparent")
     ctk.CTkCheckBox(
         also_frame, text="📊 CSV", variable=csv_var,
@@ -122,7 +127,6 @@ def build_pw_action_bar(
     wrap.add(split_entry)
     ToolTip(split_entry, "Split exports every N reviews (0 = no split).")
 
-    # ---- Analytics row -----------------------------------------------
     for label, fn, w in (
         ("📊 Summary", actions.write_summary, 110),
         ("🔍 Search", actions.search_dump, 110),
@@ -131,7 +135,6 @@ def build_pw_action_bar(
         btn = ctk.CTkButton(wrap, text=label, width=w, command=fn)
         wrap.add(btn)
 
-    # ---- AI / analytics row (right-pinned Settings) -----------------
     for label, fn, w in (
         ("🤖 Copy + AI prompt", actions.copy_with_ai_prompt, 170),
         ("💾 Save as prompt", actions.save_as_prompt, 140),
@@ -147,6 +150,32 @@ def build_pw_action_bar(
         command=actions.open_settings, fg_color="#444",
     )
     wrap.add(settings, side="right")
+
+    # ---- Live button-text sync (Export <-> Generate all) ----------
+    # Mirrors the API tab: when any of CSV / JSON / Per-lang is on,
+    # the Export button text changes from "Export to .md" to
+    # "Generate all" so the user knows they're getting more than the
+    # .md. ``trace_add`` fires on the Tk event loop so this is
+    # thread-safe.
+
+    def _refresh_export_text(*_args: Any) -> None:
+        btn = refs.export_btn
+        if btn is None:
+            return
+        wants_extra = (
+            csv_var.get() == "1"
+            or json_var.get() == "1"
+            or per_lang_var.get() == "1"
+        )
+        btn.configure(
+            text=_EXPORT_GENERATE_ALL_TEXT
+            if wants_extra else _EXPORT_BASE_TEXT,
+        )
+
+    csv_var.trace_add("write", _refresh_export_text)
+    json_var.trace_add("write", _refresh_export_text)
+    per_lang_var.trace_add("write", _refresh_export_text)
+    _refresh_export_text()
 
     return refs
 

@@ -85,22 +85,20 @@ class ApiTabController(ActionStateMixin):
         self._watch_stop = threading.Event()
         self._watching = False
         self._since: dict[str, Any] = {}
-        # Bus subscriptions for button-state management. Keep refs so we
-        # can unsubscribe on close (avoid leaks). ``Fetch started``
-        # disables Fetch/Resume/Fetch-new and enables Stop; ``Fetch
-        # completed/failed`` restores the buttons; ``Fetch completed``
-        # also enables Export (the user's headline complaint: "Export
-        # to .md button does not get active anymore after fetching").
-        self._bus_subs_state: list[tuple[str, Callable[..., None]]] = [
-            (self.api_wf.FETCH_STARTED,
-             lambda **kw: self._on_fetch_started(**kw)),
-            (self.api_wf.FETCH_COMPLETED,
-             lambda **kw: self._on_fetch_completed(**kw)),
-            (self.api_wf.FETCH_FAILED,
-             lambda **kw: self._on_fetch_failed(**kw)),
-        ]
-        for event, cb in self._bus_subs_state:
-            bus.subscribe(event, cb)
+        # Wire button-state management to the workflow's bus events.
+        # This is the single source of truth that toggles the
+        # Export / Fetch-new / Resume / Stop / Watch buttons in
+        # response to FETCH_STARTED / FETCH_COMPLETED / FETCH_FAILED.
+        # An older in-line subscription block was removed — it called
+        # ``self._on_fetch_completed(**kw)`` against the mixin's
+        # ``(kw: dict, *, source: str)`` signature and silently raised
+        # TypeError, so the Export button was never enabled.
+        self.install_action_state_bus(
+            started_event=self.api_wf.FETCH_STARTED,
+            completed_event=self.api_wf.FETCH_COMPLETED,
+            failed_event=self.api_wf.FETCH_FAILED,
+            source="api",
+        )
         self._build()
 
     # ---- build -------------------------------------------------------
@@ -170,6 +168,7 @@ class ApiTabController(ActionStateMixin):
 
     def _bind_shortcuts(self) -> None:
         self.master.bind_all("<Control-f>", lambda _e: self._on_fetch())
+        self.master.bind_all("<Control-Shift-f>", lambda _e: self._on_fetch_new())
         self.master.bind_all("<Control-s>", lambda _e: self._on_stop())
         self.master.bind_all("<Control-e>", lambda _e: self._on_export())
         self.master.bind_all("<Control-w>", lambda _e: self._on_watch_toggle())
