@@ -1,0 +1,1 @@
+"""Utilities: pure helpers with no external state."""

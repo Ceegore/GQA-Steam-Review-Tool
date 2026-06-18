@@ -1,0 +1,1 @@
+"""Models layer: pure data structures (dataclasses), no behavior."""

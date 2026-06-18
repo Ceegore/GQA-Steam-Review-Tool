@@ -1,0 +1,1 @@
+"""UI layer: CustomTkinter widgets, tabs, and dialogs."""

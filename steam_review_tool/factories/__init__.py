@@ -1,0 +1,1 @@
+"""Factories: composition root for dependency injection."""

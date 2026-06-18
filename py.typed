@@ -1,0 +1,3 @@
+# PEP 561 marker — declares that this package ships type hints.
+# mypy will then look inside steam_review_tool/ for types instead
+# of falling back to Any.

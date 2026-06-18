@@ -1,0 +1,1 @@
+"""Core layer: lifecycle constants, timezone helpers, paths, event bus, logging."""
