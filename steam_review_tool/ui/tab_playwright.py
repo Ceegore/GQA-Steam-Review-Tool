@@ -29,6 +29,7 @@ from ..ui._pw_sections import (
     PwFilterRefs, build_pw_dependencies_section,
     build_pw_filters_section, build_pw_game_section,
 )
+from ..ui._action_state import ActionStateMixin
 from ..ui._since_section import build_since_section
 from ..ui._tab_actions import TabActions
 from ..ui._tab_hint import PLAYWRIGHT_HINT, build_tab_hint
@@ -36,7 +37,7 @@ from ..utils.text_utils import make_export_basename, short_filter_label
 from ..utils.url_utils import resolve_app_id
 
 
-class PlaywrightTabController:
+class PlaywrightTabController(ActionStateMixin):
     """Owns the "Playwright (real-time)" tab widgets + handlers."""
 
     def __init__(
@@ -79,6 +80,21 @@ class PlaywrightTabController:
         self.pw_split_var = ctk.StringVar(value="0")
 
         self._since: dict[str, Any] = {}
+        self._scrape_running = False
+        # Bus subscriptions for button-state management. Mirrors the
+        # API tab: SCRAPE_STARTED disables Scrape / Resume / Fetch-new
+        # and enables Stop; SCRAPE_COMPLETED / SCRAPE_FAILED restore
+        # buttons and enable Export when reviews are available.
+        self._bus_subs_state: list[tuple[str, Callable[..., None]]] = [
+            (self.pw_wf.SCRAPE_STARTED,
+             lambda **kw: self._on_scrape_started(**kw)),
+            (self.pw_wf.SCRAPE_COMPLETED,
+             lambda **kw: self._on_scrape_completed(**kw)),
+            (self.pw_wf.SCRAPE_FAILED,
+             lambda **kw: self._on_scrape_failed(**kw)),
+        ]
+        for event, cb in self._bus_subs_state:
+            bus.subscribe(event, cb)
         self._build()
         bus.subscribe(self.pw_wf.DEP_STATUS_CHANGED, self._on_dep_status)
 

@@ -31,6 +31,7 @@ from ..ui._api_sections import (
     ApiFilterRefs, ApiGameRefs, build_api_filters_section,
     build_api_game_section,
 )
+from ..ui._action_state import ActionStateMixin
 from ..ui._since_section import build_since_section
 from ..ui._tab_actions import TabActions
 from ..ui._tab_hint import API_HINT, build_tab_hint
@@ -38,7 +39,7 @@ from ..utils.text_utils import make_export_basename, short_filter_label
 from ..utils.url_utils import resolve_app_id
 
 
-class ApiTabController:
+class ApiTabController(ActionStateMixin):
     """Owns the "Steam API (cached)" tab widgets + handlers."""
 
     def __init__(
@@ -82,7 +83,24 @@ class ApiTabController:
         # Watch-mode worker state
         self._watch_thread: Optional[threading.Thread] = None
         self._watch_stop = threading.Event()
+        self._watching = False
         self._since: dict[str, Any] = {}
+        # Bus subscriptions for button-state management. Keep refs so we
+        # can unsubscribe on close (avoid leaks). ``Fetch started``
+        # disables Fetch/Resume/Fetch-new and enables Stop; ``Fetch
+        # completed/failed`` restores the buttons; ``Fetch completed``
+        # also enables Export (the user's headline complaint: "Export
+        # to .md button does not get active anymore after fetching").
+        self._bus_subs_state: list[tuple[str, Callable[..., None]]] = [
+            (self.api_wf.FETCH_STARTED,
+             lambda **kw: self._on_fetch_started(**kw)),
+            (self.api_wf.FETCH_COMPLETED,
+             lambda **kw: self._on_fetch_completed(**kw)),
+            (self.api_wf.FETCH_FAILED,
+             lambda **kw: self._on_fetch_failed(**kw)),
+        ]
+        for event, cb in self._bus_subs_state:
+            bus.subscribe(event, cb)
         self._build()
 
     # ---- build -------------------------------------------------------
@@ -277,6 +295,9 @@ class ApiTabController:
         self.master.app_details = details
         self._log(f"Loaded: {details.get('name')}")
         bus.publish("app.loaded", app_id=app_id, app_details=details)
+        # A new game id invalidates any prior state — refresh the
+        # button enable/disable set.
+        self._refresh_button_states(source="api")
 
     def _on_fetch(self) -> None:
         if self.master.app_id is None:
@@ -397,8 +418,10 @@ class ApiTabController:
     def _on_watch_toggle(self) -> None:
         if self._watch_thread and self._watch_thread.is_alive():
             self._stop_watch(); self._log("Watch mode stopped.")
+            self._watching = False
             if self._action_refs.watch_btn is not None:
                 self._action_refs.watch_btn.configure(text="▶ Start Watching")
+            self._refresh_button_states(source="api")
             return
         if self.master.app_id is None:
             self._log("Load a game first."); return
@@ -407,6 +430,7 @@ class ApiTabController:
             minutes = int(self.filter_refs.interval_var.get()) if self.filter_refs else 5
         except ValueError:
             minutes = 5
+        self._watching = True
         if self._action_refs.watch_btn is not None:
             self._action_refs.watch_btn.configure(text="■ Stop Watching")
         self._log(f"Watching every {minutes} min…")
@@ -426,6 +450,7 @@ class ApiTabController:
                 if self._watch_stop.wait(timeout=minutes * 60): return
         self._watch_thread = threading.Thread(target=_worker, daemon=True)
         self._watch_thread.start()
+        self._refresh_button_states(source="api")
 
     def _stop_watch(self) -> None:
         self._watch_stop.set()
