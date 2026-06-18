@@ -6,35 +6,33 @@ hitting the same un-cached ``ajaxappreviews`` endpoint that the
 storefront itself uses, but carrying the real browser cookies /
 age-check state.
 
-Workflow:
-  1. Launch Chromium (sync API).
-  2. Add an init script that masks ``navigator.webdriver`` and other
-     automation signals (see ``ANTI_DETECT_JS``).
-  3. Navigate to the store page so the storefront's JS sets up
-     cookies + session.
-  4. Try to dismiss common age-gate / cookie buttons.
-  5. Use ``page.evaluate()`` to call the same AJAX endpoint the
-     storefront's React app uses, looping through cursors until we
-     reach ``max_reviews`` or the cursor stops advancing.
-  6. Normalise the JSON into the same shape ``SteamAPI.fetch_all_reviews``
-     returns so the existing Markdown exporter / dump repository
-     work unchanged.
+Two execution paths, picked automatically:
 
-This is the Phase-7 deliverable. It gracefully degrades when
-Playwright or Chromium is not installed: the entry-point functions
-log a clear error and return ``[]`` so the GUI doesn't crash.
+* **In-process** (default, ``python main.py``): Playwright is
+  imported in this interpreter and the scrape loop runs directly
+  on the GUI thread's worker.
+
+* **Subprocess** (frozen ``.exe``): ``sys.frozen`` is True, so there
+  is no Python interpreter inside the binary to do ``import
+  playwright``. We instead spawn an external Python interpreter
+  that runs the helper script in
+  :mod:`steam_review_tool.services.playwright_subprocess_scraper`
+  and stream progress / reviews / logs back via JSON-lines on
+  stdout.
 """
 from __future__ import annotations
 
 import json
+import sys
 import time
-from typing import Callable, Optional, Any
+from typing import Any, Callable, Optional
 
 from ..core.constants import (
     ANTI_DETECT_JS, DEFAULT_USER_AGENT, PLAYWRIGHT_JS_WAIT_SEC,
     STEAM_LANGUAGES,
 )
 from ..core.logger import get_logger
+from . import playwright_subprocess_scraper
 from .browser_launcher import inject_anti_detect, try_dismiss_gates
 
 
@@ -79,13 +77,23 @@ def _playwright_or_warn(
         return sync_playwright
     except ImportError:
         msg = (
-            "playwright Python package not installed — "
-            "click 'Install Playwright' in the Dependencies panel."
+            "playwright Python package not installed in the current "
+            "Python interpreter — click 'Install Playwright' in the "
+            "Dependencies panel."
         )
         _log.warning(msg)
         if log_cb:
-            log_cb("❌ " + msg)
+            log_cb(msg)
         return None
+
+
+def _normalise_inputs(language: str, max_reviews: int,
+                      num_per_page: int) -> tuple[str, int, int]:
+    if language not in STEAM_LANGUAGES:
+        language = "all"
+    num_per_page = max(1, min(int(num_per_page or 100), 100))
+    max_reviews = max(1, int(max_reviews or 100))
+    return language, max_reviews, num_per_page
 
 
 def scrape_reviews(
@@ -102,19 +110,32 @@ def scrape_reviews(
 ) -> list[dict[str, Any]]:
     """Launch Chromium, drive the storefront, return normalised reviews.
 
-    Returns a list[Any] of dicts in the same shape ``SteamAPI.fetch_all_reviews``
-    produces. Empty list[Any] on any failure (with a log message) so the
+    Returns a list of dicts in the same shape ``SteamAPI.fetch_all_reviews``
+    produces. Empty list on any failure (with a log message) so the
     GUI stays responsive.
+
+    When the app is frozen (``sys.frozen``), the whole scrape runs in
+    a subprocess so we can use Playwright + Chromium installed in an
+    external Python interpreter.
     """
     log = log_cb or (lambda _msg: None)
+    language, max_reviews, num_per_page = _normalise_inputs(
+        language, max_reviews, num_per_page,
+    )
+
+    if getattr(sys, "frozen", False):
+        # Single-file .exe: we have no Python in-process, so route
+        # the whole scrape through an external interpreter.
+        return playwright_subprocess_scraper.scrape_reviews_subprocess(
+            app_id, language=language, sort=sort,
+            max_reviews=max_reviews, num_per_page=num_per_page,
+            fetch_page_js=FETCH_PAGE_JS,
+            log_cb=log, stop_flag=stop_flag, progress_cb=progress_cb,
+        )
+
     sync_playwright = _playwright_or_warn(log)
     if sync_playwright is None:
         return []
-
-    if language not in STEAM_LANGUAGES:
-        language = "all"
-    num_per_page = max(1, min(int(num_per_page or 100), 100))
-    max_reviews = max(1, int(max_reviews or 100))
 
     all_reviews: list[dict[str, Any]] = []
     cursor = "*"
@@ -200,7 +221,7 @@ def scrape_reviews(
     except Exception as exc:
         msg = f"Playwright scrape failed: {type(exc).__name__}: {exc}"
         _log.exception(msg)
-        log("❌ " + msg)
+        log(msg)
         return all_reviews
 
     log(f"Scrape done: {len(all_reviews)} reviews kept.")
@@ -209,6 +230,11 @@ def scrape_reviews(
 
 def is_available() -> bool:
     """Cheap probe — ``True`` iff Playwright + Chromium are usable."""
+    if getattr(sys, "frozen", False):
+        # When frozen we can't import playwright in-process; defer to
+        # the subprocess-based check the GUI already uses.
+        from . import dependency_checker
+        return dependency_checker.is_chromium_installed()
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
