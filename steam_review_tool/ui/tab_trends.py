@@ -1,12 +1,29 @@
-"""Trends tab — list[Any] + add/remove tracked apps, open chart, refresh now.
+"""Trends tab — list + add/remove tracked apps, open chart, refresh now.
 
-Matches the original monolith: each row shows the tracked app name +
-App ID + a per-row Remove button. A separate input row accepts a
-custom App ID to add. A "Refresh all" worker hits the Playwright
-scraper (or Apify) for each tracked app and records a snapshot.
+Each row shows the tracked app name + App ID + a per-row Remove
+button. A separate input row accepts a custom App ID to add. A
+"Refresh all" worker hits the Playwright scraper (or Apify) for each
+tracked app and records a snapshot.
 
 Heavy lifting lives in ``controllers/trends_workflow.py``. The
 chart popup lives in ``popup_trends_chart.py``.
+
+Layout (top-to-bottom, all inside ``self.body`` which is a
+:class:`CTkScrollableFrame`)::
+
+    📌 When to use this tab (collapsible, default collapsed)
+    ┌────────────────────────────────────────────┐
+    │ Add App ID: ... [Add to trends]            │
+    │              [Add currently loaded]         │
+    ├────────────────────────────────────────────┤
+    │ Tracked apps:                              │
+    │   • App X (App 1234)         [Remove]      │
+    │   • App Y (App 5678)         [Remove]      │
+    ├────────────────────────────────────────────┤
+    │ [Refresh all] [View graph] [Remove all]    │
+    │ Language: [...]  [Per-language review...]  │
+    │ Status: ...                                 │
+    └────────────────────────────────────────────┘
 """
 from __future__ import annotations
 
@@ -18,6 +35,7 @@ import customtkinter as ctk
 from ..controllers.trends_workflow import TrendsWorkflow
 from ..models.trends_snapshot import TrendsSnapshot
 from ..services.trends_store import TrendsStore
+from ._tab_hint import TRENDS_HINT, build_tab_hint
 
 
 class TrendsTabController:
@@ -45,22 +63,17 @@ class TrendsTabController:
     # ---- build -------------------------------------------------------
 
     def _build(self) -> None:
-        # Explanation header
-        ctk.CTkLabel(
-            self.parent,
-            text=(
-                "📈 Wishlist / follower / review trends\n\n"
-                "Each time you click 'Refresh all' (or when the app "
-                "starts), the current wishlist / follower / review "
-                "counts are scraped from the Steam storefront and "
-                "saved to a local time-series DB."
-            ),
-            anchor="w", justify="left",
-        ).pack(fill="x", padx=10, pady=(10, 4))
+        # Scrollable container — every control stays reachable even
+        # on small windows.
+        self.body = ctk.CTkScrollableFrame(self.parent, fg_color="transparent")
+        self.body.pack(fill="both", expand=True, padx=4, pady=4)
 
-        # Add-app row
-        add_row = ctk.CTkFrame(self.parent, fg_color="transparent")
-        add_row.pack(fill="x", padx=10, pady=(0, 4))
+        # 1. Tab-purpose hint (collapsed by default)
+        build_tab_hint(self.body, hint_text=TRENDS_HINT, expanded=False)
+
+        # 2. Add-app row
+        add_row = ctk.CTkFrame(self.body, fg_color="transparent")
+        add_row.pack(fill="x", padx=10, pady=(4, 4))
         ctk.CTkLabel(add_row, text="Add App ID:", width=90, anchor="e").pack(
             side="left", padx=(0, 4),
         )
@@ -77,16 +90,18 @@ class TrendsTabController:
             command=self._on_add_current,
         ).pack(side="left", padx=4)
 
-        # Tracked apps list[Any] (scrollable, one row per app with its own Remove)
+        # 3. Tracked apps list (scrollable, one row per app with its own Remove)
         ctk.CTkLabel(
-            self.parent, text="Tracked apps:", anchor="w",
+            self.body, text="Tracked apps:", anchor="w",
             font=("", 12, "bold"),
         ).pack(fill="x", padx=10, pady=(8, 0))
-        self._body = ctk.CTkScrollableFrame(self.parent, height=180)
-        self._body.pack(fill="both", expand=True, padx=8, pady=(0, 6))
+        # Body uses the *outer* scrollable frame's scrolling, but we
+        # still want a bounded list area. Use a plain inner frame.
+        self._list_inner = ctk.CTkFrame(self.body, fg_color="transparent")
+        self._list_inner.pack(fill="x", padx=8, pady=(0, 6))
 
-        # Action row
-        action_row = ctk.CTkFrame(self.parent, fg_color="transparent")
+        # 4. Action row
+        action_row = ctk.CTkFrame(self.body, fg_color="transparent")
         action_row.pack(fill="x", padx=10, pady=4)
         ctk.CTkButton(
             action_row, text="🔄 Refresh all", width=130,
@@ -121,18 +136,18 @@ class TrendsTabController:
     # ---- handlers ----------------------------------------------------
 
     def _refresh(self) -> None:
-        if self._body is None:
+        if self._list_inner is None:
             return
-        for w in self._body.winfo_children():
+        for w in self._list_inner.winfo_children():
             w.destroy()
         tracked = self.trends_wf.list_tracked()
         if not tracked:
             ctk.CTkLabel(
-                self._body, text="(no apps tracked yet)", text_color="gray",
+                self._list_inner, text="(no apps tracked yet)", text_color="gray",
             ).pack(pady=8)
             return
         for a in tracked:
-            row = ctk.CTkFrame(self._body, fg_color="transparent")
+            row = ctk.CTkFrame(self._list_inner, fg_color="transparent")
             row.pack(fill="x", pady=2)
             ctk.CTkLabel(
                 row, text=f"• {a['name']} (App {a['app_id']})",

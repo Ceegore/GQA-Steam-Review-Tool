@@ -1,9 +1,17 @@
 """Filter + game-section widget builders for the Steam API tab.
 
 Extracted from ``tab_api.py`` to keep the controller file under the
-500-line hard limit. Builds the verbose CustomTkinter widget grids
-and returns a small ``ApiFilterRefs`` namedtuple with the widget
-handles the controller needs (entries, StringVars, etc.).
+500-line hard limit. Builds:
+
+* the Game input + collapsible Dump-folder/Vault row
+* the Filter section (now using :class:`ResponsiveGrid` so the
+  filter widgets flow into 2-4 columns on wide windows and collapse
+  to a single column on narrow ones)
+* the Backend override row
+
+The "Reset filters" button that sits in the Filters header is
+returned separately so the controller can wire it to its
+``_reset_filters`` handler.
 """
 from __future__ import annotations
 
@@ -13,8 +21,19 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from ..core.constants import REVIEW_FILTERS, REVIEW_TYPES, STEAM_LANGUAGES
+from ._responsive import ResponsiveGrid
 from .collapsible_group import CollapsibleGroup
+from .section_header import make_section
 from .tooltip import ToolTip
+
+
+# Stable identifiers used by the grid reflow callback to locate the
+# text-entry widgets after each layout pass. The factory closures
+# tag each entry with one of these so ``_capture_entries`` can put
+# the right handle on the right ``ApiFilterRefs`` slot.
+_PLAYTIME_ID = "__playtime__"
+_HELPFUL_ID = "__helpful__"
+_APIFY_ID = "__apify__"
 
 
 @dataclass
@@ -29,9 +48,9 @@ class ApiFilterRefs:
     interval_var: ctk.StringVar
     first_24h_var: ctk.StringVar
     backend_var: ctk.StringVar
-    playtime_min_entry: ctk.CTkEntry
-    helpful_entry: ctk.CTkEntry
-    apify_entry: ctk.CTkEntry
+    playtime_min_entry: Optional[ctk.CTkEntry]
+    helpful_entry: Optional[ctk.CTkEntry]
+    apify_entry: Optional[ctk.CTkEntry]
 
 
 @dataclass
@@ -41,6 +60,15 @@ class ApiGameRefs:
     dump_label: ctk.CTkLabel
     seen_label: ctk.CTkLabel
     obsidian_label: ctk.CTkLabel
+
+
+def _make_entry(parent: ctk.CTkFrame, *, width: int,
+                placeholder: str, tag_id: str) -> ctk.CTkEntry:
+    """Build a CTkEntry and tag it with ``tag_id`` via ``._tag`` so
+    the reflow callback can find it again after every re-flow."""
+    entry = ctk.CTkEntry(parent, width=width, placeholder_text=placeholder)
+    setattr(entry, "_tag", tag_id)
+    return entry
 
 
 def build_api_game_section(
@@ -55,12 +83,12 @@ def build_api_game_section(
 ) -> ApiGameRefs:
     """Build the Game input + Dump-folder collapsible group."""
     sec = ctk.CTkFrame(parent)
-    sec.pack(fill="x", padx=8, pady=(8, 4))
+    sec.pack(fill="x", padx=8, pady=(4, 2))
     ctk.CTkLabel(sec, text="Game", font=("", 13, "bold")).pack(
-        anchor="w", padx=8, pady=(6, 2),
+        anchor="w", padx=8, pady=(4, 2),
     )
     row = ctk.CTkFrame(sec, fg_color="transparent")
-    row.pack(fill="x", padx=8, pady=(0, 6))
+    row.pack(fill="x", padx=8, pady=(0, 4))
     ctk.CTkLabel(
         row, text="App ID / store URL:", width=140, anchor="w",
     ).pack(side="left", padx=(4, 6))
@@ -79,7 +107,7 @@ def build_api_game_section(
     df_group = CollapsibleGroup(
         sec, "Dump folder & Vault", expanded=False, icon="📂",
     )
-    df_group.outer.pack(fill="x", padx=4, pady=(2, 4))
+    df_group.outer.pack(fill="x", padx=4, pady=(2, 2))
     df_inner = ctk.CTkFrame(df_group.body, fg_color="transparent")
     df_inner.pack(fill="x", padx=4, pady=2)
     dump_label = ctk.CTkLabel(
@@ -122,37 +150,19 @@ def build_api_game_section(
     )
 
 
-def build_api_filters_section(parent: ctk.CTkBaseClass) -> ApiFilterRefs:
-    """Build the 6 filter rows + the Apify-token backend row."""
-    sec_filt = ctk.CTkFrame(parent)
-    sec_filt.pack(fill="x", padx=8, pady=(4, 4))
-    ctk.CTkLabel(
-        sec_filt, text="Filters", font=("", 13, "bold"),
-    ).pack(anchor="w", padx=8, pady=(6, 2))
-    filt_group = CollapsibleGroup(
-        sec_filt, "Filter options", expanded=True, icon="🔍",
-    )
-    filt_group.outer.pack(fill="x", padx=2, pady=(2, 2))
-    fbody = filt_group.body
+def build_api_filters_section(
+    parent: ctk.CTkBaseClass,
+    *,
+    on_reset: Callable[[], None],
+) -> tuple[ApiFilterRefs, ctk.CTkButton]:
+    """Build the filter section + the Apify-token backend row.
 
-    def _row() -> ctk.CTkFrame:
-        r = ctk.CTkFrame(fbody, fg_color="transparent")
-        r.pack(fill="x", padx=4, pady=2)
-        return r
-
-    def _label(parent_: ctk.CTkFrame, text: str, tip: str = "") -> None:
-        l = ctk.CTkLabel(parent_, text=text, anchor="e", width=130)
-        l.pack(side="left", padx=(10, 4), pady=5)
-        if tip:
-            ToolTip(l, tip)
-
-    def _widget(parent_: ctk.CTkFrame, widget: ctk.CTkBaseClass,
-                tip: str = "") -> ctk.CTkBaseClass:
-        widget.pack(side="left", padx=4, pady=5)
-        if tip:
-            ToolTip(widget, tip)
-        return widget
-
+    Returns ``(refs, reset_btn)`` where ``refs`` is the
+    :class:`ApiFilterRefs` and ``reset_btn`` is the "Reset filters"
+    button (already wired to ``on_reset``).
+    """
+    # StringVars (state lives outside the widget tree, so it survives
+    # every re-flow of the ResponsiveGrid).
     refs = ApiFilterRefs(
         lang_var=ctk.StringVar(value="all"),
         filter_var=ctk.StringVar(value="recent"),
@@ -163,75 +173,114 @@ def build_api_filters_section(parent: ctk.CTkBaseClass) -> ApiFilterRefs:
         interval_var=ctk.StringVar(value="5"),
         first_24h_var=ctk.StringVar(value="all"),
         backend_var=ctk.StringVar(value="Steam API"),
-        playtime_min_entry=ctk.CTkEntry(
-            parent, width=140, placeholder_text="blank = none",
-        ),
-        helpful_entry=ctk.CTkEntry(
-            parent, width=140, placeholder_text="0",
-        ),
-        apify_entry=ctk.CTkEntry(
-            parent, width=300, placeholder_text="apify_api_xxx…",
-        ),
+        playtime_min_entry=None,  # set by _capture_entries
+        helpful_entry=None,
+        apify_entry=None,
     )
 
-    r0 = _row()
-    _label(r0, "Language:", tip="'all' returns every available language.")
-    _widget(r0, ctk.CTkOptionMenu(
-        r0, values=STEAM_LANGUAGES, variable=refs.lang_var, width=240,
-    ), tip="Pick a language code or 'all'.")
-    r1 = _row()
-    _label(r1, "Sort by:", tip="recent / updated / all")
-    _widget(r1, ctk.CTkOptionMenu(
-        r1, values=REVIEW_FILTERS, variable=refs.filter_var, width=140,
-    ))
-    _label(r1, "Sentiment:")
-    _widget(r1, ctk.CTkOptionMenu(
-        r1, values=REVIEW_TYPES, variable=refs.type_var, width=140,
-    ))
-    r2 = _row()
-    _label(r2, "Purchase type:", tip="all / steam / non_steam")
-    _widget(r2, ctk.CTkOptionMenu(
-        r2, values=["all", "steam", "non_steam"],
-        variable=refs.purchase_var, width=140,
-    ))
-    _label(r2, "Min playtime (hrs):", tip="Blank = no limit.")
-    refs.playtime_min_entry = _widget(r2, refs.playtime_min_entry)
-    r3 = _row()
-    _label(r3, "Min helpful votes:", tip="Quality threshold.")
-    refs.helpful_entry = _widget(r3, refs.helpful_entry)
-    _label(r3, "Include off-topic:", tip="false = hide memes/test/etc.")
-    _widget(r3, ctk.CTkOptionMenu(
-        r3, values=["false", "true"],
-        variable=refs.offtopic_var, width=140,
-    ))
-    r4 = _row()
-    _label(r4, "Reviews per page:", tip="Steam caps this at 100.")
-    _widget(r4, ctk.CTkOptionMenu(
-        r4, values=["20", "50", "100"], variable=refs.perpage_var, width=140,
-    ))
-    _label(r4, "Watch interval (min):", tip="Polling cadence.")
-    _widget(r4, ctk.CTkOptionMenu(
-        r4, values=["1", "2", "5", "10", "15", "30", "60"],
-        variable=refs.interval_var, width=140,
-    ))
-    r5 = _row()
-    _label(r5, "Window:", tip="all | first 24h | last 7d")
-    _widget(r5, ctk.CTkOptionMenu(
-        r5, values=["all", "first 24h", "last 7d"],
-        variable=refs.first_24h_var, width=140,
-    ))
+    # Filters section header + reset button.
+    reset_btn = ctk.CTkButton(
+        parent, text="Reset filters", width=110, height=26,
+        command=on_reset, fg_color="#444",
+    )
+    ToolTip(reset_btn, "Reset all filters in this section to defaults.")
+    sec_filt_body = make_section(
+        parent, "Filters", right_widget=reset_btn,
+    )
 
-    # Backend override row
-    sec_be = ctk.CTkFrame(parent)
-    sec_be.pack(fill="x", padx=8, pady=(4, 4))
-    ctk.CTkLabel(
-        sec_be, text="Backend (optional override)",
-        font=("", 13, "bold"),
-    ).pack(anchor="w", padx=8, pady=(6, 2))
+    # Collapsible filter-options group.
+    filt_group = CollapsibleGroup(
+        sec_filt_body, "Filter options", expanded=True, icon="🔍",
+    )
+    filt_group.outer.pack(fill="x", padx=2, pady=(2, 2))
+    fbody = filt_group.body
+
+    # Responsive grid: N columns based on container width.
+    grid = ResponsiveGrid(fbody, min_col_width=280, label_width=120)
+    grid.add_row(
+        "Language:", lambda p: ctk.CTkOptionMenu(
+            p, values=STEAM_LANGUAGES, variable=refs.lang_var, width=180,
+        ),
+        tip="'all' returns every available language.",
+    )
+    grid.add_row(
+        "Sort by:", lambda p: ctk.CTkOptionMenu(
+            p, values=REVIEW_FILTERS, variable=refs.filter_var, width=140,
+        ),
+        tip="recent / updated / all",
+    )
+    grid.add_row(
+        "Sentiment:", lambda p: ctk.CTkOptionMenu(
+            p, values=REVIEW_TYPES, variable=refs.type_var, width=140,
+        ),
+        tip="all / positive / negative",
+    )
+    grid.add_row(
+        "Purchase type:", lambda p: ctk.CTkOptionMenu(
+            p, values=["all", "steam", "non_steam"],
+            variable=refs.purchase_var, width=140,
+        ),
+        tip="all / steam / non_steam",
+    )
+    grid.add_row(
+        "Min playtime (hrs):",
+        lambda p: _make_entry(p, width=160,
+                              placeholder="blank = none",
+                              tag_id=_PLAYTIME_ID),
+        tip="Blank = no limit.",
+    )
+    grid.add_row(
+        "Min helpful votes:",
+        lambda p: _make_entry(p, width=160, placeholder="0",
+                              tag_id=_HELPFUL_ID),
+        tip="Quality threshold.",
+    )
+    grid.add_row(
+        "Include off-topic:", lambda p: ctk.CTkOptionMenu(
+            p, values=["false", "true"], variable=refs.offtopic_var, width=140,
+        ),
+        tip="false = hide memes/test/etc.",
+    )
+    grid.add_row(
+        "Reviews per page:", lambda p: ctk.CTkOptionMenu(
+            p, values=["20", "50", "100"], variable=refs.perpage_var, width=140,
+        ),
+        tip="Steam caps this at 100.",
+    )
+    grid.add_row(
+        "Watch interval (min):", lambda p: ctk.CTkOptionMenu(
+            p, values=["1", "2", "5", "10", "15", "30", "60"],
+            variable=refs.interval_var, width=140,
+        ),
+        tip="Polling cadence.",
+    )
+    grid.add_row(
+        "Window:", lambda p: ctk.CTkOptionMenu(
+            p, values=["all", "first 24h", "last 7d"],
+            variable=refs.first_24h_var, width=140,
+        ),
+        tip="all | first 24h | last 7d",
+    )
+    def _capture_entries() -> None:
+        """Walk the freshly-built grid and assign entries by their tag."""
+        for col in grid._col_frames:  # noqa: SLF001 - internal OK
+            for row in col.winfo_children():
+                for w in row.winfo_children():
+                    tag = getattr(w, "_tag", None)
+                    if tag == _PLAYTIME_ID:
+                        refs.playtime_min_entry = w
+                    elif tag == _HELPFUL_ID:
+                        refs.helpful_entry = w
+
+    grid.on_reflow(_capture_entries)
+    grid.build()
+
+    # Backend override row.
+    sec_be = make_section(parent, "Backend (optional override)")
     brow = ctk.CTkFrame(sec_be, fg_color="transparent")
-    brow.pack(fill="x", padx=8, pady=(2, 6))
-    ctk.CTkLabel(brow, text="Engine:", width=130, anchor="e").pack(
-        side="left", padx=(10, 4),
+    brow.pack(fill="x", padx=4, pady=2)
+    ctk.CTkLabel(brow, text="Engine:", width=120, anchor="e").pack(
+        side="left", padx=(4, 4),
     )
     ctk.CTkOptionMenu(
         brow, values=["Steam API", "Apify (bypasses cache)"],
@@ -240,8 +289,14 @@ def build_api_filters_section(parent: ctk.CTkBaseClass) -> ApiFilterRefs:
     ctk.CTkLabel(brow, text="Apify token:", width=90, anchor="e").pack(
         side="left", padx=(20, 4),
     )
-    refs.apify_entry.pack(side="left", padx=4, fill="x", expand=True)
-    return refs
+    apify_entry = _make_entry(
+        brow, width=300, placeholder="apify_api_xxx…",
+        tag_id=_APIFY_ID,
+    )
+    apify_entry.pack(side="left", padx=4, fill="x", expand=True)
+    refs.apify_entry = apify_entry
+
+    return refs, reset_btn
 
 
 __all__ = [

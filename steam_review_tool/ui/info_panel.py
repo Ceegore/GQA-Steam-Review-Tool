@@ -17,7 +17,7 @@ class InfoPanel(ctk.CTkFrame):
     """A side panel showing loaded-game info and a clock."""
 
     def __init__(self, master) -> None:
-        super().__init__(master, width=240)
+        super().__init__(master, width=220)
         self._name_lbl = ctk.CTkLabel(
             self, text="(no game loaded)", font=("", 13, "bold"),
             anchor="w", justify="left", wraplength=220,
