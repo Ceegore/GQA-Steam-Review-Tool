@@ -51,7 +51,7 @@ class App(ctk.CTk):
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
-        self.title("Steam Review Analyzer")
+        self.title("GQA Steam Review Tool")
         self.geometry("1180x880")
         self.minsize(1000, 780)
 
@@ -131,10 +131,14 @@ class App(ctk.CTk):
 
         # Help / About
         self._help_dialog: Optional[HelpDialog] = None
+        self._welcome_dialog: Optional[WelcomeDialog] = None
         try:
             menubar = tk.Menu(self)
             helpmenu = tk.Menu(menubar, tearoff=0)
             helpmenu.add_command(label="How to use…", command=self._on_show_help)
+            helpmenu.add_command(
+                label="Show welcome…", command=self._on_show_welcome,
+            )
             menubar.add_cascade(label="Help", menu=helpmenu)
             self.configure(menu=menubar)
         except tk.TclError:
@@ -152,6 +156,12 @@ class App(ctk.CTk):
         # Kick off Playwright availability probe and clock
         self.pw_wf.refresh_dep_status()
         self.after(1000, self._tick_clock)
+
+        # Show the welcome popup on first launch (or when re-opened
+        # via Help → Show welcome…). 300 ms gives the main window
+        # time to render and ``winfo_*`` queries to return real
+        # coordinates, so we can centre the popup.
+        self.after(300, self._show_welcome_if_first_launch)
 
         # Bus subscriptions: keep references so we can unsubscribe on
         # close. Previously these were bare lambdas — a memory leak
@@ -234,6 +244,36 @@ class App(ctk.CTk):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self)
         self._help_dialog.open()
+
+    def _show_welcome_if_first_launch(self) -> None:
+        """Open the welcome popup if the user hasn't dismissed it.
+
+        Persisted in ``settings.json`` under ``greeting_shown``.
+        """
+        if self.settings.get("greeting_shown"):
+            return
+        self._on_show_welcome()
+
+    def _on_show_welcome(self) -> None:
+        if self._welcome_dialog is None:
+            self._welcome_dialog = WelcomeDialog(
+                self,
+                settings=self.settings,
+                on_save_settings=self._persist_settings,
+            )
+        self._welcome_dialog.open()
+
+    def _persist_settings(self, data: dict[str, Any]) -> None:
+        """Best-effort save used by the welcome popup's
+        ``Don't show again`` checkbox.
+        """
+        from ..services.settings_store import save as _save
+        self.settings.update(data)
+        try:
+            _save(self.settings)
+        except Exception:
+            # Persisting is best-effort; don't crash the UI for it.
+            pass
 
     def _on_open_settings(self) -> None:
         """Open the Settings popup. Tab controllers wire their

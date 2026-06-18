@@ -8,10 +8,11 @@ import customtkinter as ctk
 
 
 HELP_TEXT = """\
-# How to use Steam Review Analyzer
+# GQA Steam Review Tool — How to use
 
-A PM/QA tool for early-game review analysis. The output is designed to
-be fed to an AI (ChatGPT, Claude, etc.) for fast, structured analysis.
+A small, focused PM/QA tool for early-game review analysis. The
+output is designed to be fed to an AI (ChatGPT, Claude, etc.)
+for fast, structured analysis.
 
 ## Recommended workflow (5 min per game)
 
@@ -28,20 +29,25 @@ be fed to an AI (ChatGPT, Claude, etc.) for fast, structured analysis.
 ## Tips
 
 - **Use the Steam API tab** for established games (cache miss delay ~0h).
-- **Use the Playwright tab** for new releases (last 24-72h, bypasses cache).
+- **Use the Playwright tab** for new releases (last 24-72h,
+  bypasses cache). Playwright launches a real headless Chromium
+  and hits Steam's un-cached AJAX endpoint, so you can review a
+  freshly released title the same day it launches.
 - **Settings → AI prompt template**: edit the template used for
   Copy + AI prompt. Placeholders: `{name}`, `{app_id}`, `{n}`.
-- **Settings → Keyword tags**: comma-separated list[Any] of words/phrases
+- **Settings → Keyword tags**: comma-separated list of words/phrases
   to highlight in the .md export.
 - **Search the latest dump** with the 🔍 Search button.
 
 ## Keyboard shortcuts
 
 - `Ctrl+F` — Start a Steam API fetch
+- `Ctrl+Shift+F` — "Fetch new" (dedup + auto-export)
 - `Ctrl+S` — Stop the current fetch
 - `Ctrl+E` — Export to .md
 - `Ctrl+W` — Toggle watch mode
 - `Ctrl+P` — Start a Playwright scrape
+- `Ctrl+Shift+P` — Playwright "Fetch new"
 - `Ctrl+R` — Resume a stopped fetch
 
 ## Where are my files?
@@ -49,6 +55,15 @@ be fed to an AI (ChatGPT, Claude, etc.) for fast, structured analysis.
 - Main dump folder: shown in the **status bar** at the bottom of the
   window and in each tab's Game section.
 - Per-game folder: `<main>/<app_id>_<game_name>/`.
+
+---
+
+GQA — Game Quality Assurance (https://gqa.gmbh/). A purpose-built
+tool for early-game review analysis, built to save a QA analyst
+an afternoon of copy-paste.
+
+Author: **Christoph Möbius** (https://gqa.gmbh/) — feedback and bug
+reports welcome.
 """
 
 
@@ -64,8 +79,8 @@ class HelpDialog:
             self._top.focus()
             return
         self._top = ctk.CTkToplevel(self.master)
-        self._top.title("How to use Steam Review Analyzer")
-        self._top.geometry("720x620")
+        self._top.title("How to use the GQA Steam Review Tool")
+        self._top.geometry("720x680")
         self._top.transient(self.master)
         self._build()
 

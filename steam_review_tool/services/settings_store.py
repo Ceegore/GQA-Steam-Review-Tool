@@ -31,6 +31,9 @@ DEFAULTS: dict[str, Any] = {
     "also_csv": False,
     "also_json": False,
     "per_language": False,
+    # First-launch greeting is shown once; ticking "Don't show
+    # again" in the welcome popup flips this to ``True``.
+    "greeting_shown": False,
 }
 
 # Serialise save + reload cycles. Without this, two rapid save calls

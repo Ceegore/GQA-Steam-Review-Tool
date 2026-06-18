@@ -16,7 +16,11 @@ This spec therefore:
     expects a single entry-point file. That shim does the import + DI
     wiring, then enters the CTk mainloop.
   - Drops CustomTkinter assets + tkinter assets + requests submodules.
+  - Includes the GQA logo (``steam_review_tool/ui/assets/gqa_logo.png``)
+    in the frozen bundle so the welcome popup can show it in the
+    ``.exe`` too.
 """
+import os
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
@@ -43,13 +47,25 @@ package_hiddenimports = collect_submodules("steam_review_tool")
 # Static JS snippets are read by PlaywrightSubprocess at runtime; we
 # don't embed them, the worker writes them to %TEMP% each run.
 
+# Bundle the GQA logo so the welcome popup can show it in the frozen
+# build. PyInstaller unpacks data files alongside the package so the
+# popup can resolve them via ``Path(__file__).parent / "assets" /
+# "gqa_logo.png"`` at runtime.
+_extra_datas = []
+_logo_src = os.path.join(
+    os.path.dirname(os.path.abspath("steam_review_tool.py")),
+    "steam_review_tool", "ui", "assets", "gqa_logo.png",
+)
+if os.path.exists(_logo_src):
+    _extra_datas = [(_logo_src, "steam_review_tool/ui/assets")]
+
 block_cipher = None
 
 a = Analysis(
     ["steam_review_tool.py"],
     pathex=[],
     binaries=ctk_binaries + tk_binaries,
-    datas=ctk_datas + tk_datas,
+    datas=ctk_datas + tk_datas + _extra_datas,
     hiddenimports=(
         ctk_hiddenimports
         + tk_hiddenimports

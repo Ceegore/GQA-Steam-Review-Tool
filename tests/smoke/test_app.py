@@ -17,7 +17,7 @@ from steam_review_tool.factories.app_factory import build_app
 try:
     app = build_app(**{k: v for k, v in __kwargs.items() if v is not None or k != "settings"})
     ok = (
-        app.title() == "Steam Review Analyzer"
+        app.title() == "GQA Steam Review Tool"
         and len(app.tabview._tab_dict) == 3
     )
     if __kwargs.get("settings") is not None:
