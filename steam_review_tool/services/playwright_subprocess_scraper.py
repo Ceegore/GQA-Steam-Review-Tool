@@ -67,7 +67,16 @@ import time
 
 
 def emit(obj):
-    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\\n")
+    # ``ensure_ascii=True`` so the JSON we write to stdout is pure
+    # ASCII. The WindowsApps python.exe (the typical interpreter
+    # used when the app runs as a frozen .exe) defaults its stdout
+    # encoding to the active console code page (cp1252 on
+    # Western Windows). Any non-cp1252 character in our payload
+    # (e.g. a Unicode game name, a review body in another script)
+    # would otherwise raise ``UnicodeEncodeError`` here. The parent
+    # process parses the JSON as UTF-8 so non-ASCII values
+    # round-trip correctly via ``\\uXXXX`` escapes.
+    sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\\n")
     sys.stdout.flush()
 
 

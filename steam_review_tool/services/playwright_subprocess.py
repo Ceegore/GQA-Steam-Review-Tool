@@ -105,7 +105,8 @@ def run_popularity_probe(app_id: int, timeout: int = 90) -> dict[str, Any]:
         _log.warning("could not write helper script: %s", exc)
         return {"wishlist": None, "followers": None, "reviews": None}
 
-    cfg = json.dumps({"app_id": app_id})
+    # ASCII-safe JSON dump — see note in helper module above.
+    cfg = json.dumps({"app_id": app_id}, ensure_ascii=True)
     try:
         result = subprocess.run(
             [py, str(helper_path)],
