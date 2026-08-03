@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 
 _HELPER = """
@@ -41,7 +42,7 @@ def _run_app_subprocess(extra_args: dict) -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True, text=True, timeout=30,
-        cwd="d:/Projects/test2/steam_review_tool",
+        cwd=str(Path(__file__).resolve().parent.parent.parent),
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 

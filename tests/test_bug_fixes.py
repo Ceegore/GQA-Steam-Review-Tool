@@ -201,7 +201,7 @@ def _run_info_panel_subtest(args: str) -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True, text=True, timeout=15,
-        cwd="d:/Projects/test2/steam_review_tool",
+        cwd=str(Path(__file__).resolve().parent.parent),
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
