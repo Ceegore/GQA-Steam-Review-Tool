@@ -59,17 +59,15 @@ dist/
 *.egg-info/
 
 # ---------- Project-local artefacts ----------
-# Old monolithic build kept for historical reference (tracked below).
 err.log
 out.log
 screenshot_*.png
 _wc.py
 
-# Track the historical monolith + verification script + refactor plan
-# explicitly (they're intentionally checked in):
-!steam_review_tool.legacy.py.bak
-!_verify.py
-!_refactoringplan.md
+# ---------- Project cleanup staging ----------
+# Anything parked here is for safekeeping / archival — never tracked.
+backup/
+backup-*/
 
 # ---------- Secrets / local overrides ----------
 .env
