@@ -30,6 +30,7 @@ from ..services.steam_api_service import SteamAPI
 from ..services.trends_store import TrendsStore
 from .info_panel import InfoPanel
 from .popup_help import HelpDialog
+from .popup_welcome import WelcomeDialog
 from .tab_api import ApiTabController
 from .tab_playwright import PlaywrightTabController
 from .tab_trends import TrendsTabController
