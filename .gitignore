@@ -69,6 +69,12 @@ _wc.py
 backup/
 backup-*/
 
+# ---------- One-off bug-hunt repros ----------
+# A leading-dot + .tmp_ prefix is the convention the agent uses for
+# throwaway diagnostic scripts (e.g. ``.tmp_repro.py``). They're
+# never meant to be tracked.
+.tmp_*
+
 # ---------- Secrets / local overrides ----------
 .env
 .env.*

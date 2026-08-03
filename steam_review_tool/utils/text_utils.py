@@ -49,11 +49,30 @@ def short_filter_label(tab: str, app) -> str:
     Reads the appropriate GUI widgets via ``app`` and returns something
     like ``"last3h"``, ``"last24h"``, ``"all"``, or
     ``"custom2026-06-10T14h"``.
+
+    Accepts either:
+      * a tab controller (the ``ApiTabController`` /
+        ``PlaywrightTabController``) — its ``_since`` dict is read for
+        ``preset_var`` / ``date_entry`` / ``time_entry``;
+      * a flat object exposing ``since_preset_var`` /
+        ``since_date_entry`` / ``since_time_entry`` (the old shape,
+        kept for back-compat with ad-hoc callers / tests).
     """
     prefix = "pw_" if tab == "pw" else ""
+
+    # ---- resolve preset ------------------------------------------------
+    preset_obj = getattr(app, f"{prefix}since_preset_var", None)
+    if preset_obj is None:
+        # Tab-controller shape: nested in self._since.
+        since = getattr(app, "_since", None)
+        if isinstance(since, dict):
+            preset_obj = since.get("preset_var")
     try:
-        preset = getattr(app, f"{prefix}since_preset_var").get()
+        preset = preset_obj.get() if preset_obj is not None else ""
     except AttributeError:
+        preset = ""
+
+    if not preset:
         return "all"
     if not preset.startswith("custom"):
         parts = preset.split()
@@ -61,11 +80,23 @@ def short_filter_label(tab: str, app) -> str:
             unit = parts[2].rstrip("s")
             return f"last{parts[1]}{unit[0]}"
         return "all"
+
+    # ---- custom mode: read date + time --------------------------------
+    date_obj = getattr(app, f"{prefix}since_date_entry", None)
+    time_obj = getattr(app, f"{prefix}since_time_entry", None)
+    if date_obj is None and time_obj is None:
+        since = getattr(app, "_since", None)
+        if isinstance(since, dict):
+            date_obj = date_obj or since.get("date_entry")
+            time_obj = time_obj or since.get("time_entry")
     try:
-        d = getattr(app, f"{prefix}since_date_entry").get()
-        t = getattr(app, f"{prefix}since_time_entry").get()
+        d = date_obj.get() if date_obj is not None else ""
     except AttributeError:
-        return "custom"
+        d = ""
+    try:
+        t = time_obj.get() if time_obj is not None else ""
+    except AttributeError:
+        t = ""
     if d and t:
         return f"custom{d.replace('-', '')}T{t.replace(':', '')}"
     if d:

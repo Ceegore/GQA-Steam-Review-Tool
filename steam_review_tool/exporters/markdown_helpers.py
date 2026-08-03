@@ -156,7 +156,7 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
         f"| Language | `{r.get('language', '—')}` |",
         f"| Posted | {ts_to_iso(r.get('timestamp_created'))} |",
         f"| Updated | {ts_to_iso(r.get('timestamp_updated'))} |",
-        f"| Played forever? | {yesno(r.get('written_during_early_access'))} |",
+        f"| Written during early access? | {yesno(r.get('written_during_early_access'))} |",
         f"| Purchase type | {purchase_badge} |",
         f"| Received for free | {yesno(r.get('received_for_free'))} |",
     ]

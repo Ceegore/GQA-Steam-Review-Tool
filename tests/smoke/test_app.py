@@ -39,9 +39,15 @@ def _run_app_subprocess(extra_args: dict) -> tuple[int, str]:
     script = _HELPER.replace(
         "__kwargs", repr(extra_args).replace("'", '"'),
     )
+    # Building the App spins up CustomTkinter (3 s) + 3 tabs (each
+    # builds 4-8 widgets inside a CTkScrollableFrame, which in turn
+    # triggers a reflow per resize). On a slow Windows VM the whole
+    # stack takes ~50 s — the previous 30 s timeout was a false-fail
+    # waiting to happen. 120 s is well clear of the worst observed
+    # time and still short enough to surface a real hang.
     proc = subprocess.run(
         [sys.executable, "-c", script],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=120,
         cwd=str(Path(__file__).resolve().parent.parent.parent),
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")

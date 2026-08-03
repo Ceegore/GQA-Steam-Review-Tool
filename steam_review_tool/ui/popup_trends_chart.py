@@ -182,7 +182,11 @@ class TrendsWindow:
                 continue
             pts = []
             for d in days_sorted:
-                if d < cutoff and days:
+                # ``d`` is a day-number (unix-timestamp // 86400) and
+                # ``cutoff`` is a unix-timestamp — comparing the two
+                # directly was always True and stripped out every
+                # data point. Compare the *reconstructed* timestamp.
+                if days and d * 86400 < cutoff:
                     continue
                 x = pad_l + (d - d_min) / max(d_max - d_min, 1) * plot_w
                 v = per_day[d][0]

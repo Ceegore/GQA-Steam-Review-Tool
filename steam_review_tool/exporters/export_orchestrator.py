@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional, Any
 
+from ..core.atomic_write import atomic_write_text
 from ..models.export_context import ExportContext
 from .csv_exporter import reviews_to_csv
 from .json_exporter import reviews_to_json
@@ -32,6 +33,12 @@ def run(
 
     Returns ``{md, csv, json, per_lang, summary, obsidian}`` each
     containing a Path (or None) so the caller can show toasts.
+
+    Every write path goes through :func:`atomic_write_text` so a
+    crash mid-export cannot leave a half-written ``.md`` /
+    ``.csv`` / ``.json`` / ``.summary.md`` behind. ``MarkdownExporter.write``
+    already used atomic writes; the orchestrator previously did not,
+    which was an inconsistency that bit a real user.
     """
     log = log_cb or (lambda m: None)
     base = dest.with_suffix("")
@@ -42,7 +49,7 @@ def run(
 
     # Main .md
     md_text = MarkdownExporter.render(ctx, include_header=True)
-    dest.write_text(md_text, encoding="utf-8")
+    atomic_write_text(dest, md_text)
     result["md"] = dest
     log(f"Exported {len(ctx.reviews)} reviews to {dest}")
 
@@ -50,7 +57,7 @@ def run(
     if also_csv:
         csv_path = dest.with_suffix(".csv")
         try:
-            reviews_to_csv(ctx.reviews, csv_path)
+            _write_csv_atomic(ctx.reviews, csv_path)
             result["csv"] = csv_path
             log(f"  + CSV: {csv_path}")
         except OSError as exc:
@@ -60,7 +67,7 @@ def run(
     if also_json:
         json_path = dest.with_suffix(".json")
         try:
-            reviews_to_json(ctx.reviews, json_path)
+            _write_json_atomic(ctx.reviews, json_path)
             result["json"] = json_path
             log(f"  + JSON: {json_path}")
         except OSError as exc:
@@ -81,7 +88,7 @@ def run(
         try:
             summary_text = build_summary(ctx.reviews, ctx.app_details)
             summary_path = Path(f"{base}.summary.md")
-            summary_path.write_text(summary_text, encoding="utf-8")
+            atomic_write_text(summary_path, summary_text)
             result["summary"] = summary_path
             log(f"  + Summary: {summary_path}")
         except OSError as exc:
@@ -97,6 +104,55 @@ def run(
             log(f"  Obsidian copy failed: {err}")
 
     return result
+
+
+def _write_csv_atomic(
+    reviews: list[dict[str, Any]], dest: Path,
+) -> None:
+    """Render the CSV in memory, then write atomically.
+
+    ``reviews_to_csv`` writes through ``open(..., "w")`` which is
+    not atomic on a crash — partial .csv files would survive. We
+    build the text in memory and hand it to ``atomic_write_text``.
+    """
+    import csv
+    import io
+    from .csv_exporter import COLUMNS
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(COLUMNS)
+    for r in reviews:
+        author = r.get("author", {}) or {}
+        w.writerow([
+            str(r.get("recommendationid", "")),
+            str(r.get("language", "")),
+            int(bool(r.get("voted_up"))),
+            int(r.get("votes_up", 0) or 0),
+            int(r.get("votes_funny", 0) or 0),
+            int(r.get("comment_count", 0) or 0),
+            str(author.get("steamid", "")),
+            int(author.get("playtime_forever", 0) or 0),
+            int(author.get("last_played", 0) or 0),
+            int(r.get("timestamp_created", 0) or 0),
+            int(r.get("timestamp_updated", 0) or 0),
+            str(r.get("weighted_vote_score", "")),
+            int(bool(r.get("steam_purchase"))),
+            int(bool(r.get("received_for_free"))),
+            int(bool(r.get("written_during_early_access"))),
+            (r.get("review") or "").replace("\n", " ").replace("\r", " "),
+        ])
+    atomic_write_text(dest, buf.getvalue())
+
+
+def _write_json_atomic(
+    reviews: list[dict[str, Any]], dest: Path,
+) -> None:
+    """Render JSON in memory, then write atomically."""
+    import json
+    atomic_write_text(
+        dest,
+        json.dumps(reviews, indent=2, ensure_ascii=False),
+    )
 
 
 __all__ = ["run"]

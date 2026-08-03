@@ -148,8 +148,13 @@ def scrape_reviews(
             browser = p.chromium.launch(headless=True)
             try:
                 ctx = browser.new_context(user_agent=DEFAULT_USER_AGENT)
-                inject_anti_detect(ctx.new_page())
+                # Anti-detect must be installed on the *page that
+                # actually navigates*. Installing it on a throwaway
+                # page (the previous behaviour) left the real
+                # page_obj with no shim and Steam's bot detection
+                # could flag the session.
                 page_obj = ctx.new_page()
+                inject_anti_detect(page_obj)
                 store_url = (
                     f"https://store.steampowered.com/app/{app_id}/"
                 )

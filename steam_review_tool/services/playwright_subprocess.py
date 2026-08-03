@@ -91,13 +91,15 @@ def run_popularity_probe(app_id: int, timeout: int = 90) -> dict[str, Any]:
         anti_detect_js=ANTI_DETECT_JS,
         wait_sec=PLAYWRIGHT_JS_WAIT_SEC,
     )
-    # PID-suffixed filename prevents two concurrent probes from
-    # clobbering each other's helper script. Also enables cleanup
-    # by finding and removing any helpers left over from a crashed
-    # parent process.
+    # PID + UUID-suffixed filename prevents two concurrent probes
+    # (or two probes for the same app_id, after Python GCs the int
+    # and reuses its id()) from clobbering each other's helper
+    # script. Also enables cleanup by finding and removing any
+    # helpers left over from a crashed parent process.
+    import uuid
     helper_path = (
         Path(tempfile.gettempdir())
-        / f"_srt_pw_probe_{os.getpid()}_{id(app_id) & 0xFFFF}.py"
+        / f"_srt_pw_probe_{os.getpid()}_{uuid.uuid4().hex[:8]}.py"
     )
     try:
         helper_path.write_text(helper_text, encoding="utf-8")

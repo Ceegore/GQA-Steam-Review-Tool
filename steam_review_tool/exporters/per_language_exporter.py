@@ -23,8 +23,11 @@ def write_per_language(
 ) -> int:
     """Write one extra ``.md`` per language (if reviews span >1 langs).
 
-    Returns the number of extra files written.
+    Returns the number of extra files written. Each file is written
+    atomically so a crash mid-write cannot leave a half-written
+    per-language ``.md`` behind.
     """
+    from ..core.atomic_write import atomic_write_text
     groups = group_by_language(reviews)
     if len(groups) <= 1:
         return 0
@@ -38,7 +41,7 @@ def write_per_language(
         ctx = ExportContext(**{**export_ctx.__dict__, "reviews": lang_reviews})
         try:
             md = MarkdownExporter.render(ctx, include_header=True)
-            per_path.write_text(md, encoding="utf-8")
+            atomic_write_text(per_path, md)
             n += 1
         except OSError:
             pass

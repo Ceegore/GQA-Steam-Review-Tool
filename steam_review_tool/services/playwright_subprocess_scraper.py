@@ -138,8 +138,13 @@ def main():
             browser = p.chromium.launch(headless=True)
             try:
                 ctx = browser.new_context(user_agent=DEFAULT_USER_AGENT)
-                page = ctx.new_page()
+                # Register the init script *before* creating the page
+                # so the first navigation already carries the shim;
+                # the previous order (new_page → add_init_script) left
+                # the first goto uncloaked, which Steam's anti-bot
+                # flags as a clear automation tell.
                 ctx.add_init_script(ANTI_DETECT_JS)
+                page = ctx.new_page()
 
                 store_url = "https://store.steampowered.com/app/" + str(app_id) + "/"
                 log("Navigating to " + store_url)
@@ -261,9 +266,15 @@ def scrape_reviews_subprocess(
         anti_detect_js=ANTI_DETECT_JS,
         wait_sec=PLAYWRIGHT_JS_WAIT_SEC,
     )
+    # PID + UUID-suffixed filename: two concurrent scrapes in the
+    # same process used to share ``_srt_scrape_<pid>_<pid & 0xFFFF>.py``
+    # because the second component duplicated the first, so a second
+    # ``scrape_reviews_subprocess`` call clobbered the first helper
+    # mid-scrape. UUID eliminates the collision.
+    import uuid
     helper_path = (
         Path(tempfile.gettempdir())
-        / f"_srt_scrape_{os.getpid()}_{os.getpid() & 0xFFFF}.py"
+        / f"_srt_scrape_{os.getpid()}_{uuid.uuid4().hex[:8]}.py"
     )
     try:
         helper_path.write_text(helper_text, encoding="utf-8")
