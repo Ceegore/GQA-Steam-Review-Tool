@@ -48,42 +48,63 @@ def install_playwright(
         "sys.exit(rc)\n",
         encoding="utf-8",
     )
-    result = subprocess.run(
-        [python_exe, str(helper)],
-        capture_output=True, text=True, timeout=300,
-    )
-    if result.returncode == 0:
-        on_done(True, "Playwright installed.")
-        return
-
-    stderr = (result.stderr or "") + (result.stdout or "")
-    if "No module named pip" in stderr or "pip" in stderr.lower():
-        log_cb("pip missing in target Python, bootstrapping from get-pip.py…")
+    # Each helper script we write into the system temp dir gets an
+    # explicit try/finally cleanup. Without it, every install attempt
+    # left a stale ``_srt_install_pw.py`` / ``_srt_install_chrome.py`` /
+    # ``get-pip.py`` behind in ``%TEMP%`` — accumulating one file per
+    # user click and (on Windows) eventually tripping AV heuristics.
+    try:
         try:
-            tmp = Path(tempfile.gettempdir()) / "get-pip.py"
-            urllib.request.urlretrieve(
-                "https://bootstrap.pypa.io/get-pip.py", str(tmp),
-            )
-            boot = subprocess.run(
-                [python_exe, str(tmp)],
-                capture_output=True, text=True, timeout=120,
-            )
-            if boot.returncode != 0:
-                raise RuntimeError(boot.stderr or boot.stdout)
-            log_cb("pip bootstrapped. Retrying playwright install…")
             result = subprocess.run(
                 [python_exe, str(helper)],
                 capture_output=True, text=True, timeout=300,
             )
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr or result.stdout)
-            on_done(True, "Playwright installed after pip bootstrap.")
-            return
         except Exception as exc:
-            on_done(False, f"Bootstrap failed: {exc}")
+            on_done(False, f"Install failed to launch: {exc}")
+            return
+        if result.returncode == 0:
+            on_done(True, "Playwright installed.")
             return
 
-    on_done(False, f"Install failed (exit {result.returncode}): {stderr[-800:]}")
+        stderr = (result.stderr or "") + (result.stdout or "")
+        if "No module named pip" in stderr or "pip" in stderr.lower():
+            log_cb("pip missing in target Python, bootstrapping from get-pip.py…")
+            try:
+                tmp = Path(tempfile.gettempdir()) / "get-pip.py"
+                urllib.request.urlretrieve(
+                    "https://bootstrap.pypa.io/get-pip.py", str(tmp),
+                )
+                try:
+                    boot = subprocess.run(
+                        [python_exe, str(tmp)],
+                        capture_output=True, text=True, timeout=120,
+                    )
+                    if boot.returncode != 0:
+                        raise RuntimeError(boot.stderr or boot.stdout)
+                    log_cb("pip bootstrapped. Retrying playwright install…")
+                    result = subprocess.run(
+                        [python_exe, str(helper)],
+                        capture_output=True, text=True, timeout=300,
+                    )
+                    if result.returncode != 0:
+                        raise RuntimeError(result.stderr or result.stdout)
+                    on_done(True, "Playwright installed after pip bootstrap.")
+                    return
+                finally:
+                    try:
+                        tmp.unlink()
+                    except OSError:
+                        pass
+            except Exception as exc:
+                on_done(False, f"Bootstrap failed: {exc}")
+                return
+
+        on_done(False, f"Install failed (exit {result.returncode}): {stderr[-800:]}")
+    finally:
+        try:
+            helper.unlink()
+        except OSError:
+            pass
 
 
 def install_chromium(
@@ -103,23 +124,59 @@ def install_chromium(
         "sys.exit(rc)\n",
         encoding="utf-8",
     )
-    result = subprocess.run(
-        [python_exe, str(helper)],
-        capture_output=True, text=True, timeout=600,
-    )
-    if result.returncode != 0:
-        on_done(False, (
-            result.stderr or result.stdout or "Unknown error"
-        )[-1000:])
-        return
-    on_done(True, "Chromium downloaded.")
+    try:
+        try:
+            result = subprocess.run(
+                [python_exe, str(helper)],
+                capture_output=True, text=True, timeout=600,
+            )
+        except Exception as exc:
+            on_done(False, f"Install failed to launch: {exc}")
+            return
+        if result.returncode != 0:
+            on_done(False, (
+                result.stderr or result.stdout or "Unknown error"
+            )[-1000:])
+            return
+        on_done(True, "Chromium downloaded.")
+    finally:
+        try:
+            helper.unlink()
+        except OSError:
+            pass
 
 
 def open_pw_cache() -> Optional[str]:
     """Open the Playwright browser cache folder. Returns an error message
     if it doesn't exist yet, otherwise ``None``.
+
+    The cache path differs by platform:
+      * Windows: ``%LOCALAPPDATA%\\ms-playwright`` (preferred) or
+        ``%USERPROFILE%\\AppData\\Local\\ms-playwright`` (fallback).
+      * macOS:   ``~/Library/Caches/ms-playwright``.
+      * Linux:   ``$XDG_CACHE_HOME/ms-playwright`` (defaults to
+        ``~/.cache/ms-playwright``).
+
+    The previous hard-coded Windows path silently returned
+    "does not exist yet" on macOS/Linux because the user has no
+    ``~/AppData/Local`` directory.
     """
-    cache = Path.home() / "AppData" / "Local" / "ms-playwright"
+    if sys.platform == "win32":
+        local_app = os.environ.get("LOCALAPPDATA")
+        if local_app:
+            cache = Path(local_app) / "ms-playwright"
+        else:
+            cache = Path.home() / "AppData" / "Local" / "ms-playwright"
+    elif sys.platform == "darwin":
+        cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+    else:
+        # Linux / other Unix: honour $XDG_CACHE_HOME, fall back to
+        # ``~/.cache`` per the freedesktop spec.
+        xdg = os.environ.get("XDG_CACHE_HOME")
+        cache = (
+            Path(xdg) / "ms-playwright" if xdg
+            else Path.home() / ".cache" / "ms-playwright"
+        )
     if not cache.exists():
         return (
             f"Playwright cache folder does not exist yet:\n{cache}\n\n"

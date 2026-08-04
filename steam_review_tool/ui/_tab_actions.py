@@ -59,8 +59,14 @@ class TabActions:
             getattr(self.master, "app_details", None),
         )
         out = latest.with_name(latest.stem + ".summary.md")
+        # Atomic write — a crash mid-write must not leave a half-written
+        # ``.summary.md`` behind that the user would mistake for a real
+        # file. The exporter orchestrator already routes through
+        # ``atomic_write_text``; this path was the last remaining
+        # non-atomic write of the user-facing .md outputs.
+        from ..core.atomic_write import atomic_write_text
         try:
-            out.write_text(text, encoding="utf-8")
+            atomic_write_text(out, text)
             self._log(f"Summary → {out}")
         except OSError as exc:
             self._log(f"Summary write failed: {exc}")
@@ -127,10 +133,11 @@ class TabActions:
             self._log(f"Could not read dump: {exc}")
             return
         out = latest.with_name("ai_prompt.md")
+        from ..core.atomic_write import atomic_write_text
         try:
-            out.write_text(
+            atomic_write_text(
+                out,
                 f"# AI prompt\n{prompt}\n\n# Dump\n{dump}",
-                encoding="utf-8",
             )
             self._log(f"Saved prompt bundle → {out}")
         except OSError as exc:

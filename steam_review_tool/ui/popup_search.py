@@ -152,7 +152,13 @@ class SearchWindow:
                         "\n".join(current_lines),
                     ))
                 try:
-                    num = line.split("#", 2)[2].strip()
+                    # Strip the leading ``### Review #`` (the heading
+                    # prefix) so we keep just the number, not
+                    # ``# Review #1``. The previous ``line.split("#", 2)``
+                    # dropped only the first two ``#``s and left a third
+                    # in the suffix, producing labels like
+                    # ``Review ## Review #1``.
+                    num = line.split("### Review #", 1)[1].strip()
                 except Exception:
                     num = "?"
                 current_label = f"Review #{num}"

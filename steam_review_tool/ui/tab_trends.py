@@ -172,20 +172,20 @@ class TrendsTabController:
         if self._input_entry is None:
             return
         raw = self._input_entry.get().strip()
-        try:
-            app_id = int(raw)
-        except ValueError:
-            if self._status_lbl is not None:
-                self._status_lbl.configure(text="Invalid App ID.")
-            return
+        # Accept raw integers AND full Steam URLs / steam:// links —
+        # the previous code called ``int(raw)`` first which rejected
+        # any URL with a ValueError before the resolve_app_id fallback
+        # could run, so a user pasting a store URL got "Invalid App ID."
+        from ..utils.url_utils import resolve_app_id
+        app_id = resolve_app_id(raw)
+        if app_id is None:
+            try:
+                app_id = int(raw)
+            except ValueError:
+                if self._status_lbl is not None:
+                    self._status_lbl.configure(text="Invalid App ID.")
+                return
         name = f"App {app_id}"
-        try:
-            from ..utils.url_utils import resolve_app_id
-            parsed = resolve_app_id(raw)
-            if parsed is not None:
-                app_id = parsed
-        except Exception:
-            pass
         self.trends_wf.add(app_id, name)
         self._input_entry.delete(0, "end")
         self._refresh()
@@ -236,18 +236,16 @@ class TrendsTabController:
         from ..services.steam_api_service import SteamAPI
         api = SteamAPI()
         lang = self._lang_var.get()
-        if lang == "all":
-            reviews = api.fetch_all_reviews(
-                self.master.app_id, language="all",
-                review_filter="all", review_type="all",
-                num_per_page=100, log_cb=self._log_status,
-            )
-        else:
-            reviews = api.fetch_all_reviews(
-                self.master.app_id, language=lang,
-                review_filter="all", review_type="all",
-                num_per_page=100, log_cb=self._log_status,
-            )
+        # The two branches of the previous ``if lang == "all"`` were
+        # identical (both called ``fetch_all_reviews`` with the same
+        # kwargs except ``language`` — which was set to the same
+        # value via the ``lang`` local in both cases). One call is
+        # enough.
+        reviews = api.fetch_all_reviews(
+            self.master.app_id, language=lang,
+            review_filter="all", review_type="all",
+            num_per_page=100, log_cb=self._log_status,
+        )
         if self._status_lbl is not None:
             self._status_lbl.configure(
                 text=f"{lang}: {len(reviews)} reviews",
