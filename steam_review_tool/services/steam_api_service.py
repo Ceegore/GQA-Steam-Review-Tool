@@ -206,10 +206,21 @@ class SteamAPI:
                 break
             cursor = new_cursor
             if cursor_cb is not None:
+                # The previous bare ``except Exception: pass``
+                # silently dropped resume-cursor save failures
+                # (disk full, file locked, perms denied). The
+                # fetch kept running, the user clicked Stop or the
+                # process died, and on next launch there was NO
+                # cursor to resume from — silently re-fetching
+                # every page from the start. Surface the error so
+                # the user can spot a missing resume state.
                 try:
                     cursor_cb(cursor)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    _log.warning(
+                        "resume-cursor save failed: %s: %s",
+                        type(exc).__name__, exc,
+                    )
             time.sleep(STEAM_API_PAGE_DELAY_SEC)
 
         return all_reviews

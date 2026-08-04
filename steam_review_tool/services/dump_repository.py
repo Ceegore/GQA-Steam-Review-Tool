@@ -104,17 +104,42 @@ class DumpRepository:
     def _guess_safe_name(self, app_id: int) -> str:
         """Find the per-game folder for ``app_id`` and reuse its safe_name.
         Falls back to ``str(app_id)`` if the folder doesn't exist yet.
+
+        If multiple folders match the ``<app_id>_`` prefix (e.g. the
+        game was renamed and the user has folders from both the old
+        and new game names), return the safe_name from the
+        **most recently modified** folder. The old code returned
+        the FIRST match from ``os.scandir``, which is OS-dependent
+        and non-deterministic across runs — a user with two stale
+        folders could end up loading the wrong ``seen_ids.json``
+        and silently re-dumping every review.
         """
         if not self.dump_root.exists():
             return str(app_id)
         prefix = f"{app_id}_"
+        best_name: Optional[str] = None
+        best_mtime: float = -1.0
         try:
             with os.scandir(self.dump_root) as it:
                 for entry in it:
-                    if entry.is_dir() and entry.name.startswith(prefix):
-                        return entry.name[len(prefix):]
+                    if not (entry.is_dir()
+                            and entry.name.startswith(prefix)):
+                        continue
+                    try:
+                        mt = entry.stat(follow_symlinks=False).st_mtime
+                    except OSError:
+                        # Unreadable entry — skip rather than
+                        # poisoning the "best" comparison with a
+                        # default mtime of 0 (which would always
+                        # win against real folders).
+                        continue
+                    if mt > best_mtime:
+                        best_mtime = mt
+                        best_name = entry.name[len(prefix):]
         except OSError:
             pass
+        if best_name is not None:
+            return best_name
         return str(app_id)
 
     def load_seen_ids(self, app_id: int) -> list[str]:

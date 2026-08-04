@@ -37,7 +37,24 @@ class StorefrontParser:
             r = self.session.get(url, params={"l": language}, timeout=30)
             r.raise_for_status()
             html = r.text
-        except Exception:
+        except requests.RequestException as exc:
+            # The previous bare ``except Exception: return out``
+            # silently dropped network errors — the trends tab
+            # stored ``None`` for all three metrics and the user
+            # had no way to tell whether Steam returned empty data
+            # or the request itself failed. Log the cause so the
+            # ``[time] WARNING ...`` line shows up in stderr /
+            # the dumped log.
+            _log.warning(
+                "get_popularity_metrics(%d, %s) failed: %s",
+                app_id, language, exc,
+            )
+            return out
+        except (ValueError, UnicodeDecodeError) as exc:
+            _log.warning(
+                "get_popularity_metrics(%d, %s): bad response: %s",
+                app_id, language, exc,
+            )
             return out
 
         for pat in (

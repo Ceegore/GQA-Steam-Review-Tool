@@ -59,8 +59,34 @@ def install_playwright(
                 [python_exe, str(helper)],
                 capture_output=True, text=True, timeout=300,
             )
+        except subprocess.TimeoutExpired as exc:
+            # ``TimeoutExpired`` carries the partial stdout / stderr
+            # of the still-running subprocess — the user wants to
+            # know WHAT pip printed before it hung (e.g. "downloading
+            # 47 / 152 MB"). The old broad ``except Exception``
+            # caught the timeout and reported a misleading
+            # "Install failed to launch: Command timed out after
+            # 300 seconds" — the install DID launch, it just took
+            # too long.
+            partial = (exc.stdout or "") + (exc.stderr or "")
+            tail = partial[-800:] if partial else "(no output captured)"
+            on_done(
+                False,
+                f"Install timed out after 300s.\nLast output:\n{tail}",
+            )
+            return
+        except (FileNotFoundError, OSError) as exc:
+            on_done(
+                False,
+                f"Install failed to launch: {exc}",
+            )
+            return
         except Exception as exc:
-            on_done(False, f"Install failed to launch: {exc}")
+            # Defensive catch-all for unexpected subprocess errors
+            # (e.g. ``KeyboardInterrupt`` propagated through the
+            # worker, or a future Python version adding a new
+            # exception subclass).
+            on_done(False, f"Install failed: {type(exc).__name__}: {exc}")
             return
         if result.returncode == 0:
             on_done(True, "Playwright installed.")
@@ -140,8 +166,26 @@ def install_chromium(
                 [python_exe, str(helper)],
                 capture_output=True, text=True, timeout=600,
             )
+        except subprocess.TimeoutExpired as exc:
+            # Same pattern as ``install_playwright`` — surface the
+            # partial output instead of a misleading "Install failed
+            # to launch" message.
+            partial = (exc.stdout or "") + (exc.stderr or "")
+            tail = partial[-1000:] if partial else "(no output captured)"
+            on_done(
+                False,
+                f"Chromium download timed out after 600s.\n"
+                f"Last output:\n{tail}",
+            )
+            return
+        except (FileNotFoundError, OSError) as exc:
+            on_done(
+                False,
+                f"Install failed to launch: {exc}",
+            )
+            return
         except Exception as exc:
-            on_done(False, f"Install failed to launch: {exc}")
+            on_done(False, f"Install failed: {type(exc).__name__}: {exc}")
             return
         if result.returncode != 0:
             on_done(False, (
