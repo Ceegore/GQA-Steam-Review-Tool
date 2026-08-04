@@ -94,7 +94,21 @@ def classify_review_type(review: dict[str, Any]) -> str:
 
     Priority order: bug > feature > complaint > praise > other.
     """
-    text = (review.get("review") or "").lower()
+    # The review field is normally a string, but normalised
+    # review dicts (Apify client, hand-rolled tests) can carry
+    # ``None`` or a non-string (int, list, dict). Calling
+    # ``.lower()`` on those used to raise ``AttributeError`` and
+    # the ``except Exception: pass`` blocks in
+    # ``markdown_helpers.render_review`` / ``render_digest``
+    # would silently drop the auto-type and pre-AI digest for
+    # the entire export. Coerce to ``""`` so a malformed row
+    # falls into the "other" bucket instead of breaking the
+    # whole export.
+    raw = review.get("review")
+    if not isinstance(raw, str):
+        text = ""
+    else:
+        text = raw.lower()
     if not text:
         return "other"
     if any(p in text for p in _BUG_PHRASES):
@@ -118,11 +132,31 @@ def extract_tags(
     """Return the list[Any] of keyword tags that appear in ``review``."""
     if keyword_list is None:
         keyword_list = DEFAULT_KEYWORD_TAGS
-    text = (review.get("review") or "").lower()
+    # Same defensive coercion as ``classify_review_type`` — the
+    # review field can be ``None`` or a non-string (int / list /
+    # dict) in normalised review dicts; the previous
+    # ``(review.get("review") or "").lower()`` crashed with
+    # ``AttributeError`` for those cases and the
+    # ``except Exception: pass`` in
+    # ``markdown_helpers.render_review`` would silently drop
+    # the entire Tags row.
+    raw = review.get("review")
+    if not isinstance(raw, str):
+        text = ""
+    else:
+        text = raw.lower()
     if not text:
         return []
     hits: list[str] = []
     for kw in keyword_list:
+        # The keyword list is normally a list of strings, but
+        # hand-rolled / migrated settings.json can carry ints
+        # or other non-strings. ``kw.lower()`` on a non-string
+        # used to crash with ``AttributeError``; skip those
+        # entries so one bad keyword doesn't drop the whole
+        # Tags row.
+        if not isinstance(kw, str):
+            continue
         kw_l = kw.lower().strip()
         if not kw_l:
             continue
@@ -152,16 +186,31 @@ def aggregate_top_themes(
     """Return the top N themes for the chosen sentiment."""
     if keyword_list is None:
         keyword_list = _BUG_PHRASES if mode == "negative" else _PRAISE_PHRASES
+    # Same defensive coercion as ``extract_tags`` and
+    # ``classify_review_type`` — a non-string keyword entry
+    # (int / dict / list) in the keyword list used to raise
+    # ``TypeError: 'in <string>' requires string as left
+    # operand`` and the ``except Exception: pass`` block in
+    # ``markdown_helpers.render_digest`` would silently drop
+    # the entire Pre-AI Digest block from the export.
+    cleaned_keywords: list[str] = [
+        k for k in keyword_list if isinstance(k, str) and k
+    ]
     counts: dict[str, dict[str, Any]] = {}
     for r in reviews:
         if mode == "negative" and r.get("voted_up"):
             continue
         if mode == "positive" and not r.get("voted_up"):
             continue
-        text = (r.get("review") or "").lower()
+        # Defensive coercion for the review field — see the
+        # matching fix in ``classify_review_type``.
+        raw_review = r.get("review")
+        if not isinstance(raw_review, str):
+            continue
+        text = raw_review.lower()
         if not text:
             continue
-        for phrase in keyword_list:
+        for phrase in cleaned_keywords:
             if phrase in text:
                 if phrase not in counts:
                     counts[phrase] = {

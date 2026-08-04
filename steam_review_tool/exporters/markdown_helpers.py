@@ -9,12 +9,15 @@ from __future__ import annotations
 import re
 from typing import Optional, Any
 
+from ..core.logger import get_logger
 from ..services.pre_ai_digest import (
     build_pre_ai_digest, quick_stats_footer,
 )
 from ..services.review_analyzer import classify_review_type, extract_tags
 from ..utils.coercion import safe_int, safe_str
 from ..utils.markdown_utils import md_escape, ts_to_iso, yesno
+
+_log = get_logger(__name__)
 
 
 def render_title_block(app_id: int, app: dict[str, Any], fetched_at_iso: str) -> list[str]:
@@ -29,11 +32,23 @@ def render_title_block(app_id: int, app: dict[str, Any], fetched_at_iso: str) ->
 
 
 def render_digest(reviews: list[dict[str, Any]], app: dict[str, Any], kw: Optional[list[Any]]) -> list[str]:
-    """Render the pre-AI digest block. Returns ``[]`` on any error."""
+    """Render the pre-AI digest block.
+
+    Returns ``[]`` on failure AND logs a ``warning`` — the old
+    bare ``except Exception: pass`` silently dropped the entire
+    digest for the export without telling the user, so a
+    malformed review row (non-string ``review`` field, non-string
+    keyword list entry) would remove the most useful top-of-file
+    summary without any visible signal.
+    """
     try:
         digest = build_pre_ai_digest(reviews, app_details=app, keyword_list=kw, top_n=5)
         return digest.splitlines() + [""]
-    except Exception:
+    except Exception as exc:
+        _log.warning(
+            "pre-AI digest skipped (reviews=%d): %s: %s",
+            len(reviews), type(exc).__name__, exc,
+        )
         return []
 
 
@@ -112,13 +127,18 @@ def render_summary(reviews: list[dict[str, Any]]) -> list[str]:
 def highlight_keywords(text: str, keyword_list: Optional[list[Any]]) -> str:
     if not keyword_list or not text:
         return text
+    # Defensive: a non-string keyword entry used to crash
+    # ``k.strip()`` with ``AttributeError`` and the bare
+    # ``except Exception: pass`` then returned the unhighlighted
+    # text without telling the user — the export looked correct
+    # but the highlight pass was silently skipped. Same for any
+    # later regex failure. Log + fall through to the safe
+    # "return text unchanged" path.
+    cleaned_kw = [k for k in keyword_list if isinstance(k, str) and k.strip()]
+    if not cleaned_kw:
+        return text
     try:
-        sorted_kw = sorted(
-            (k for k in keyword_list if k.strip()),
-            key=lambda k: -len(k),
-        )
-        if not sorted_kw:
-            return text
+        sorted_kw = sorted(cleaned_kw, key=lambda k: -len(k))
         parts = []
         for k in sorted_kw:
             if " " in k:
@@ -127,7 +147,12 @@ def highlight_keywords(text: str, keyword_list: Optional[list[Any]]) -> str:
                 parts.append(re.escape(k) + r"(?:e?s|e?d|ing)?")
         pat = "|".join(parts)
         return re.sub(rf"(?i)\b({pat})\b", r"**\1**", text)
-    except Exception:
+    except Exception as exc:
+        _log.warning(
+            "keyword highlight skipped (text len=%d, kws=%d): "
+            "%s: %s",
+            len(text), len(cleaned_kw), type(exc).__name__, exc,
+        )
         return text
 
 
@@ -191,16 +216,28 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
         rtype = classify_review_type(r)
         if rtype != "other":
             lines.append(f"| **Auto-type** | **{rtype}** |")
-    except Exception:
-        pass
+    except Exception as exc:
+        # These two helpers were hardened in R12-1 / R12-2 to
+        # no longer crash on non-string review / keyword
+        # fields, but a future regression (or a totally
+        # unexpected input) could still surface here. Log a
+        # warning so the user can spot a partial export; the
+        # rest of the review row is still produced below.
+        _log.warning(
+            "classify_review_type failed for review #%d: %s: %s",
+            idx, type(exc).__name__, exc,
+        )
 
     try:
         tags = extract_tags(r, keyword_list)
         if tags:
             tag_line = " ".join(f"`{t}`" for t in tags)
             lines.append(f"| **Tags** | {tag_line} |")
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.warning(
+            "extract_tags failed for review #%d: %s: %s",
+            idx, type(exc).__name__, exc,
+        )
     lines.append("")
 
     review_text = (r.get("review") or "").strip()
@@ -260,14 +297,25 @@ def render_footer(reviews: list[dict[str, Any]]) -> list[str]:
                     f"| {pt:.1f} | `{steamid}` | [link]({rev}) | [open]({url}) |"
                 )
             lines.append("")
-    except Exception:
-        pass
+    except Exception as exc:
+        # The previous bare ``except Exception: pass`` silently
+        # dropped the Top-5-reviewers table for the whole
+        # export on the first malformed review row. Log a
+        # warning so a partial export is at least visible.
+        _log.warning(
+            "Top-5-reviewers footer skipped (reviews=%d): "
+            "%s: %s",
+            len(reviews), type(exc).__name__, exc,
+        )
     try:
         stats = quick_stats_footer(reviews)
         if stats:
             lines += ["---", "", stats, ""]
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.warning(
+            "quick_stats_footer skipped (reviews=%d): %s: %s",
+            len(reviews), type(exc).__name__, exc,
+        )
     return lines
 
 

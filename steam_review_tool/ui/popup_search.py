@@ -6,6 +6,7 @@ min-helpful filters. Mirrors the original SearchWindow.
 from __future__ import annotations
 
 import re
+import threading
 import tkinter as tk
 from pathlib import Path
 from typing import Optional
@@ -36,6 +37,15 @@ class SearchWindow:
         self._status_lbl: Optional[ctk.CTkLabel] = None
         self._results_box: Optional[ctk.CTkTextbox] = None
         self._after_id: Optional[str] = None
+        # Generation counter — each new search bumps it so
+        # in-flight worker threads can detect they're stale and
+        # skip writing the (now-wrong) results back to the
+        # textbox. The old code ran the search synchronously on
+        # the Tk main thread, so a fast typist spawned 3-4
+        # overlapping searches that all wrote their results
+        # back in some unpredictable order — the last to
+        # finish won, which wasn't always the last keystroke.
+        self._search_gen = 0
 
     # ---- public --------------------------------------------------------
 
@@ -108,6 +118,10 @@ class SearchWindow:
                 top.after_cancel(self._after_id)
             except Exception:
                 pass
+        # Bump the generation counter — the in-flight worker
+        # (if any) will see this and abort instead of writing
+        # stale results back to the textbox.
+        self._search_gen += 1
         self._after_id = top.after(180, self._run_search)
 
     def _open_in_editor(self) -> None:
@@ -135,17 +149,70 @@ class SearchWindow:
         except ValueError:
             min_helpful = 0
 
+        # Snapshot the data + generation so the worker thread
+        # doesn't race against the StringVar being mutated
+        # mid-search.
+        snapshot_text = self.text
+        gen = self._search_gen
+        top = self._top
+        status_lbl = self._status_lbl
+        results_box = self._results_box
+        if top is None:
+            return
+
         if not query and sentiment == "all" and min_helpful == 0:
-            if self._status_lbl is not None:
-                self._status_lbl.configure(text="Type to search…")
+            # Fast path — the no-filter / no-query case doesn't
+            # need a worker thread, write the placeholder
+            # synchronously.
+            if status_lbl is not None:
+                status_lbl.configure(text="Type to search…")
             self._set_results("(no query yet)")
             return
 
-        blocks: list[tuple[str, str, str]] = []  # (rid, label, text)
+        # Run the actual search in a daemon thread so a fast
+        # typist doesn't queue up overlapping searches that all
+        # race to write the textbox. The old code ran the
+        # whole search synchronously on the Tk main thread,
+        # so a 100 000-line dump took 1-2 s per keystroke.
+        def worker() -> None:
+            blocks = self._parse_blocks(snapshot_text)
+            results = self._filter_blocks(
+                blocks, query=query, sentiment=sentiment,
+                min_helpful=min_helpful,
+            )
+            # If a newer search has been scheduled while we
+            # were running, our results are stale — drop them
+            # on the floor and let the newer search win.
+            if gen != self._search_gen:
+                return
+            if top is None or not top.winfo_exists():
+                return
+            if not results:
+                top.after(0, lambda: self._finalize_results(
+                    status_lbl, results_box, 0, "(no matches)",
+                ))
+                return
+            top.after(0, lambda: self._finalize_results(
+                status_lbl, results_box, len(results),
+                "\n---\n".join(results),
+            ))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @staticmethod
+    def _parse_blocks(
+        text: str,
+    ) -> list[tuple[str, str, str]]:
+        """Parse the .md dump into ``(rid, label, text)`` blocks.
+
+        Static (no widget state) so it can run on a worker
+        thread without Tk race conditions.
+        """
+        blocks: list[tuple[str, str, str]] = []
         current_rid: Optional[str] = None
         current_label: Optional[str] = None
         current_lines: list[str] = []
-        for line in self.text.splitlines():
+        for line in text.splitlines():
             if line.startswith("### Review #"):
                 if current_label is not None:
                     blocks.append((
@@ -184,10 +251,20 @@ class SearchWindow:
                 current_rid or "?", current_label,
                 "\n".join(current_lines),
             ))
+        return blocks
 
-        # Filter blocks
+    @staticmethod
+    def _filter_blocks(
+        blocks: list[tuple[str, str, str]],
+        *,
+        query: str,
+        sentiment: str,
+        min_helpful: int,
+    ) -> list[str]:
+        """Apply sentiment + min-helpful + text filters and
+        return the formatted result snippets."""
         results: list[str] = []
-        for rid, label, text in blocks:
+        for _rid, label, text in blocks:
             # Sentiment filter (heuristic by "Positive"/"Negative" cell)
             if sentiment != "all":
                 # The previous version's nested-ternary on lines 175-178
@@ -211,15 +288,23 @@ class SearchWindow:
             if query and query not in text.lower():
                 continue
             results.append(f"### {label}\n\n{text[:600]}\n")
+        return results
 
-        if not results:
-            if self._status_lbl is not None:
-                self._status_lbl.configure(text="0 matches")
-            self._set_results("(no matches)")
-            return
-        if self._status_lbl is not None:
-            self._status_lbl.configure(text=f"{len(results)} matches")
-        self._set_results("\n---\n".join(results))
+    def _finalize_results(
+        self,
+        status_lbl: Optional[ctk.CTkLabel],
+        results_box: Optional[ctk.CTkTextbox],
+        n: int,
+        text: str,
+    ) -> None:
+        """Write the search result to the textbox on the Tk main
+        thread. Routed via ``after(0, …)`` so the worker
+        doesn't touch Tk widgets directly (Tk is not
+        thread-safe).
+        """
+        if status_lbl is not None:
+            status_lbl.configure(text=f"{n} matches" if n else "0 matches")
+        self._set_results(text)
 
     def _set_results(self, text: str) -> None:
         if self._results_box is None:
