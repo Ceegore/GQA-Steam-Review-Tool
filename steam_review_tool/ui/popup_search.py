@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import re
 import tkinter as tk
+from pathlib import Path
 from typing import Optional
 
 import customtkinter as ctk
+
+from ..utils.os_open import open_path_in_os
 
 
 class SearchWindow:
@@ -108,16 +111,14 @@ class SearchWindow:
         self._after_id = top.after(180, self._run_search)
 
     def _open_in_editor(self) -> None:
-        import os, sys, subprocess
-        try:
-            if sys.platform == "win32":
-                os.startfile(self.file_path)  # noqa: S606
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", self.file_path])
-            else:
-                subprocess.Popen(["xdg-open", self.file_path])
-        except Exception as exc:
-            tk.messagebox.showerror("Open failed", str(exc))  # type: ignore[attr-defined]
+        # The cross-platform "open this path in the OS file manager"
+        # helper now lives in ``utils.os_open``. The previous
+        # 4-copy-paste of ``os.startfile / Popen / xdg-open`` was
+        # a small drift hazard: a future fix to one site had to be
+        # applied to all four.
+        err = open_path_in_os(Path(self.file_path))
+        if err is not None:
+            tk.messagebox.showerror("Open failed", err)  # type: ignore[attr-defined]
 
     def _run_search(self) -> None:
         if self._top is None:

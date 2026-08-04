@@ -27,6 +27,7 @@ Layout (top-to-bottom, all inside ``self.body`` which is a
 """
 from __future__ import annotations
 
+import threading
 from time import time as _now
 from typing import Any, Callable, Optional
 
@@ -57,6 +58,12 @@ class TrendsTabController:
         self._input_entry: Optional[ctk.CTkEntry] = None
         self._lang_var = ctk.StringVar(value="all")
         self._status_lbl: Optional[ctk.CTkLabel] = None
+        # Track the per-language-count worker so a rapid second click
+        # (or a click while a previous fetch is still in flight) can
+        # be ignored — spawning a second worker would race on the
+        # status label and produce a flicker of "fetching…" after
+        # the first worker had already written the final count.
+        self._per_lang_worker: Optional[threading.Thread] = None
         self._build()
         self._refresh()
 
@@ -240,25 +247,86 @@ class TrendsTabController:
             if self._status_lbl is not None:
                 self._status_lbl.configure(text="Load a game first.")
             return
-        from ..services.steam_api_service import SteamAPI
-        api = SteamAPI()
+        # Skip if a previous fetch is still in flight — the user's
+        # intent is "give me a count", not "spawn N concurrent
+        # fetches". A second click would otherwise race on the
+        # status label and produce a confusing flicker.
+        if (self._per_lang_worker is not None
+                and self._per_lang_worker.is_alive()):
+            if self._status_lbl is not None:
+                self._status_lbl.configure(
+                    text="Per-language count already running…",
+                )
+            return
         lang = self._lang_var.get()
-        # The two branches of the previous ``if lang == "all"`` were
-        # identical (both called ``fetch_all_reviews`` with the same
-        # kwargs except ``language`` — which was set to the same
-        # value via the ``lang`` local in both cases). One call is
-        # enough.
-        reviews = api.fetch_all_reviews(
-            self.master.app_id, language=lang,
-            review_filter="all", review_type="all",
-            num_per_page=100, log_cb=self._log_status,
-        )
+        app_id = self.master.app_id
+        # Reuse the App's cached ``SteamAPI`` instance when
+        # available — a fresh ``SteamAPI()`` per click lost the
+        # connection pool, cookies, and the User-Agent handshake
+        # on every call.
+        from ..services.steam_api_service import SteamAPI
+        api = getattr(self.master, "api", None) or SteamAPI()
         if self._status_lbl is not None:
-            self._status_lbl.configure(
-                text=f"{lang}: {len(reviews)} reviews",
+            self._status_lbl.configure(text=f"{lang}: fetching…")
+        # ``fetch_all_reviews`` is a long synchronous network call
+        # (1-2s per page, dozens of pages for popular games). The
+        # previous code ran it on the main thread, which froze the
+        # entire GUI for the duration. Run it in a worker thread
+        # and route every widget mutation through ``after(0, …)``
+        # so the GUI stays responsive and the status label is
+        # mutated on the Tk main thread.
+        def worker() -> None:
+            try:
+                reviews = api.fetch_all_reviews(
+                    app_id, language=lang,
+                    review_filter="all", review_type="all",
+                    num_per_page=100, log_cb=self._log_status_safe,
+                )
+            except Exception as exc:
+                if self._status_lbl is not None:
+                    self._status_lbl.after(
+                        0, lambda: self._set_status_safe(
+                            f"{lang}: error — {exc}",
+                        ),
+                    )
+                return
+            count = len(reviews)
+            if self._status_lbl is not None:
+                self._status_lbl.after(
+                    0, lambda: self._set_status_safe(
+                        f"{lang}: {count} reviews",
+                    ),
+                )
+        self._per_lang_worker = threading.Thread(
+            target=worker, daemon=True,
+        )
+        self._per_lang_worker.start()
+
+    def _set_status_safe(self, text: str) -> None:
+        """Mutate the status label on the main thread (Tk rule)."""
+        if self._status_lbl is not None:
+            self._status_lbl.configure(text=text)
+
+    def _log_status_safe(self, msg: str) -> None:
+        """Thread-safe variant of ``_log_status`` for the worker thread.
+
+        ``fetch_all_reviews`` invokes its ``log_cb`` from whatever
+        thread is calling it; once the per-language-count fetch
+        moves to a worker thread, that worker thread is also the
+        one calling this callback. Tk widget mutations must happen
+        on the main thread — we route through ``after(0, …)`` to
+        satisfy that.
+        """
+        if self._status_lbl is not None:
+            self._status_lbl.after(
+                0, lambda: self._set_status_safe(msg[:120]),
             )
 
     def _log_status(self, msg: str) -> None:
+        # Kept for any external caller that still uses the old
+        # single-threaded signature. New code paths should use
+        # ``_log_status_safe`` so the widget mutation is routed
+        # through ``after(0, …)``.
         if self._status_lbl is not None:
             self._status_lbl.configure(text=msg[:120])
 

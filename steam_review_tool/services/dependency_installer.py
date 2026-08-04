@@ -7,7 +7,6 @@ text widget without coupling.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable, Optional
 
+from ..utils.os_open import open_path_in_os
 from .python_runtime import find_external_python
 
 
@@ -192,20 +192,14 @@ def open_pw_cache() -> Optional[str]:
             f"Playwright cache folder does not exist yet:\n{cache}\n\n"
             "It will be created when you install Chromium."
         )
-    try:
-        if sys.platform == "win32":
-            # Use os.startfile so Explorer opens the actual folder.
-            # (Passing `"explore"` to ``Path.open`` was dead code —
-            # Path.open takes a file mode, not an Explorer verb.)
-            os.startfile(str(cache))  # noqa: S606
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(cache)])
-        else:
-            opener = shutil.which("xdg-open") or "xdg-open"
-            subprocess.Popen([opener, str(cache)])
-    except Exception as exc:
-        return str(exc)
-    return None
+    # The cross-platform "open this path in the OS file manager"
+    # helper lives in ``utils.os_open``. The previous
+    # ``shutil.which("xdg-open") or "xdg-open"`` was a no-op
+    # fallback: if xdg-open wasn't on PATH, we still ended up
+    # calling ``subprocess.Popen(["xdg-open", ...])`` which
+    # raised ``FileNotFoundError`` (now routed through the
+    # helper and returned as a normal error string).
+    return open_path_in_os(cache)
 
 
 __all__ = ["install_playwright", "install_chromium", "open_pw_cache"]

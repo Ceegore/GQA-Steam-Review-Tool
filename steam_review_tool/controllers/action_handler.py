@@ -6,12 +6,11 @@ the tabs can stay focused on building widgets.
 from __future__ import annotations
 
 import os
-import subprocess
-import sys
 import webbrowser
 from pathlib import Path
 from typing import Optional
 
+from ..utils.os_open import open_path_in_os
 from ..utils.url_utils import MAX_STEAM_APP_ID, resolve_app_id
 
 
@@ -37,16 +36,7 @@ def open_in_editor(path: Path) -> Optional[str]:
     """
     if not path.exists():
         return f"Path does not exist: {path}"
-    try:
-        if sys.platform == "win32":
-            os.startfile(str(path))  # noqa: S606
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path)])
-        return None
-    except Exception as exc:
-        return str(exc)
+    return open_path_in_os(path)
 
 
 def copy_to_clipboard(root, text: str) -> None:

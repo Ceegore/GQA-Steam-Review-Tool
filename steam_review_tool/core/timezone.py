@@ -70,11 +70,26 @@ except Exception:  # pragma: no cover - tzdata missing
 
 
 def format_berlin(ts: Optional[int]) -> str:
-    """Format a unix timestamp as 'YYYY-MM-DD HH:MM:SS (Europe/Berlin)'."""
+    """Format a unix timestamp as 'YYYY-MM-DD HH:MM:SS (Europe/Berlin)'.
+
+    Returns ``"—"`` for ``None`` and for any input that can't be
+    coerced to an integer timestamp (e.g. a stray string from a
+    hand-rolled review dict, an ``OverflowError`` for a far-future
+    year, or an ``OSError`` for a negative timestamp on Windows).
+    The previous version only handled ``None`` and crashed with
+    ``TypeError: 'str' object cannot be interpreted as an integer``
+    (or ``OSError: [Errno 22] Invalid argument``) for every other
+    bad input — same anti-pattern that ``utils.markdown_utils.ts_to_iso``
+    already guarded against with a ``try/except`` returning ``"—"``.
+    """
     if ts is None:
         return "—"
-    dt = datetime.fromtimestamp(ts, tz=BERLIN)
-    return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+    try:
+        return datetime.fromtimestamp(int(ts), tz=BERLIN).strftime(
+            "%Y-%m-%d %H:%M:%S %Z",
+        )
+    except (TypeError, ValueError, OverflowError, OSError):
+        return "—"
 
 
 def current_berlin_str() -> str:

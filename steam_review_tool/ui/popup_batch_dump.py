@@ -114,6 +114,20 @@ class BatchDumpDialog:
             self._status_lbl.configure(text="Queue cleared.")
 
     def _on_start(self) -> None:
+        # If a previous batch is still in flight, ignore the second
+        # click — the user almost certainly didn't mean to spawn a
+        # second concurrent worker that races on the status label
+        # and (more importantly) on the host tab's per-app state.
+        # A rapid double-click on the "Start" button used to spawn
+        # two workers; the second one would clear the stop flag
+        # (already clear) and re-enter the loop, which could fetch
+        # the same app twice in parallel.
+        if (self._worker is not None and self._worker.is_alive()):
+            if self._status_lbl is not None:
+                self._status_lbl.configure(
+                    text="Batch already running — ignored.",
+                )
+            return
         raw = (self._queue_text.get("1.0", "end") or "").strip() if self._queue_text else ""
         ids: list[int] = []
         for line in raw.splitlines():
@@ -154,38 +168,75 @@ class BatchDumpDialog:
             self._status_lbl.configure(text="Stopping…")
 
     def _close(self) -> None:
+        # ``destroy()`` is not safe while a worker thread is
+        # mid-iteration: the next ``self._top.after(0, …)`` will
+        # raise ``TclError: invalid command name ".!toplevel"`` and
+        # the worker's ``except`` clause tries to call
+        # ``self._top.after(0, …)`` again to show the error —
+        # which raises the same ``TclError`` and propagates out of
+        # the daemon thread. Ask the worker to stop first, then
+        # join it (with a short timeout so a stuck host callback
+        # can't hang the close), and only then destroy the window.
         self._on_stop()
+        worker = self._worker
+        if worker is not None and worker.is_alive():
+            worker.join(timeout=2.0)
         if self._top is not None:
             self._top.destroy()
 
     def _batch_worker(self, ids: list[int]) -> None:
         status_lbl = self._status_lbl
         start_btn = self._start_btn
+        # Snapshot the top-level once at the top of the worker so
+        # a mid-batch ``top.destroy()`` (e.g. the user clicks
+        # Close) doesn't make the ``after()`` calls race against
+        # a torn-down widget. If the widget is gone, we silently
+        # stop — the user already closed the dialog.
+        top = self._top
         for i, app_id in enumerate(ids, 1):
             if self._stop_flag.is_set():
                 break
             try:
-                if self._top is not None and status_lbl is not None:
-                    self._top.after(
-                        0,
-                        lambda i=i, a=app_id: status_lbl.configure(
-                            text=f"({i}/{len(ids)}) Processing {a}…"
-                        ),
-                    )
+                if top is not None and status_lbl is not None:
+                    # The widget may have been destroyed between
+                    # the snapshot and the ``after()`` call; the
+                    # ``try/except`` around the body is the
+                    # existing safety net but the explicit
+                    # ``winfo_exists`` check is a fast-path for
+                    # the common case.
+                    try:
+                        top.after(
+                            0,
+                            lambda i=i, a=app_id: status_lbl.configure(
+                                text=f"({i}/{len(ids)}) Processing {a}…"
+                            ),
+                        )
+                    except Exception:
+                        # Top was destroyed mid-batch — stop the
+                        # worker rather than letting the host
+                        # callback race against a torn-down
+                        # dialog.
+                        return
                 if self._on_run_item is not None:
                     self._on_run_item(app_id)
             except Exception as exc:
-                if self._top is not None and status_lbl is not None:
-                    self._top.after(
-                        0,
-                        lambda e=exc: status_lbl.configure(
-                            text=f"Error: {e}"
-                        ),
-                    )
-        if self._top is not None and start_btn is not None:
-            self._top.after(
-                0, lambda: start_btn.configure(state="normal"),
-            )
+                if top is not None and status_lbl is not None:
+                    try:
+                        top.after(
+                            0,
+                            lambda e=exc: status_lbl.configure(
+                                text=f"Error: {e}"
+                            ),
+                        )
+                    except Exception:
+                        return
+        if top is not None and start_btn is not None:
+            try:
+                top.after(
+                    0, lambda: start_btn.configure(state="normal"),
+                )
+            except Exception:
+                pass
 
 
 __all__ = ["BatchDumpDialog"]
