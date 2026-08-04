@@ -21,6 +21,7 @@ from ..core.constants import (
     STEAM_REVIEWS_BASE,
 )
 from ..core.logger import get_logger
+from ..utils.coercion import safe_int
 from ..utils.url_utils import resolve_app_id as _resolve_app_id
 
 
@@ -174,9 +175,14 @@ class SteamAPI:
             )
 
             if min_date_ts is not None:
+                # ``safe_int`` keeps a None or non-numeric
+                # ``timestamp_created`` from crashing the whole
+                # export — it was the same pattern R3-2 fixed in
+                # ``filter_controller`` (where the bare ``int()``
+                # raised on None / non-numeric strings).
                 page_reviews = [
                     rv for rv in page_reviews
-                    if int(rv.get("timestamp_created", 0)) >= min_date_ts
+                    if safe_int(rv, "timestamp_created", 0) >= min_date_ts
                 ]
 
             all_reviews.extend(page_reviews)

@@ -305,15 +305,70 @@ def test_find_latest_dump_md_no_md_files(tmp_path):
 # ---- Playwright subprocess: PID-based temp filename -----------------
 
 
-def test_playwright_subprocess_temp_filename_contains_pid(tmp_path):
-    """Two concurrent probes for different app_ids must not collide."""
+def test_playwright_subprocess_temp_filename_contains_pid(tmp_path, monkeypatch):
+    """Two concurrent probes for different app_ids must not collide.
+
+    The old test (commit 9388ab1) only checked ``pattern.pattern is
+    not None`` — a tautology that didn't actually exercise the
+    module. The replacement imports the real ``_render_helper``
+    template construction, runs the filename pattern through
+    the module's actual logic, and asserts it both contains the
+    current PID and a unique UUID-style suffix.
+    """
     import os as _os
-    expected_pid = _os.getpid()
-    # Just check the filename pattern via a simulated call
     import re
-    pattern = re.compile(rf"_srt_pw_probe_{expected_pid}_\d+\.py$")
-    # The module builds the path like "_srt_pw_probe_<pid>_<id>.py"
-    assert pattern.pattern is not None  # sanity
+    import sys
+    from unittest.mock import patch
+
+    expected_pid = _os.getpid()
+    pattern = re.compile(rf"_srt_pw_probe_{expected_pid}_[0-9a-f]{{8}}\.py$")
+
+    # Patch find_external_python + subprocess.run so we can intercept
+    # the filename that the module would write, without actually
+    # spawning a real Python.
+    captured: dict[str, str] = {}
+
+    def fake_run(cmd, **_kw):
+        # cmd is [py, str(helper_path), ...] — extract the filename
+        # the module built.
+        captured["helper"] = str(cmd[1])
+        from unittest.mock import MagicMock
+        m = MagicMock()
+        m.returncode = 1
+        m.stderr = "no python"
+        m.stdout = ""
+        return m
+
+    monkeypatch.setattr(
+        "steam_review_tool.services.playwright_subprocess.find_external_python",
+        lambda: sys.executable,
+    )
+    monkeypatch.setattr(
+        "steam_review_tool.services.playwright_subprocess.subprocess.run",
+        fake_run,
+    )
+
+    from steam_review_tool.services import playwright_subprocess
+    playwright_subprocess.run_popularity_probe(4311090)
+
+    assert "helper" in captured, "subprocess.run was not invoked"
+    helper_name = captured["helper"].rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+    assert pattern.match(helper_name), (
+        f"helper filename {helper_name!r} did not match the expected "
+        f"pattern {pattern.pattern!r}"
+    )
+
+    # Two concurrent probes for the same app must produce DIFFERENT
+    # UUID-suffixed filenames (no PID+id collision).
+    captured.clear()
+    playwright_subprocess.run_popularity_probe(4311090)
+    name1 = captured["helper"]
+    playwright_subprocess.run_popularity_probe(4311090)
+    name2 = captured["helper"]
+    assert name1 != name2, (
+        "Two consecutive probes produced identical helper paths — "
+        "the UUID suffix didn't differ between them."
+    )
 
 
 # ---- API Workflow: stop() then start_fetch() works ----------------------

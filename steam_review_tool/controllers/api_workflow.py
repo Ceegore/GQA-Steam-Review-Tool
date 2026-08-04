@@ -17,6 +17,7 @@ from ..models.export_context import ExportContext
 from ..services.resume_store import get as resume_get
 from ..services.resume_store import set_ as resume_set
 from ..services.steam_api_service import SteamAPI
+from ..utils.coercion import safe_int
 
 _log = get_logger(__name__)
 
@@ -138,7 +139,7 @@ class APIWorkflow:
             )
             if min_helpful > 0:
                 before = len(reviews)
-                reviews = [r for r in reviews if int(r.get("votes_up", 0) or 0) >= min_helpful]
+                reviews = [r for r in reviews if safe_int(r, "votes_up", 0) >= min_helpful]
                 self.log(f"min_helpful filter: kept {len(reviews)}/{before}")
             bus.publish(self.FETCH_COMPLETED, app_id=app_id, reviews=reviews)
         except Exception as exc:

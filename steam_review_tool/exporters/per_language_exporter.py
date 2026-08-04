@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Any
 
 from ..models.export_context import ExportContext
+from ..utils.coercion import safe_int
 from .markdown_exporter import MarkdownExporter
 
 
@@ -94,7 +95,7 @@ def build_summary(
         author = r.get("author", {}) or {}
         rid = str(r.get("recommendationid", "—"))
         steamid = str(author.get("steamid", "—"))
-        pt = int(author.get("playtime_forever", 0) or 0)
+        pt = safe_int(author, "playtime_forever", 0)
         text = (r.get("review") or "").strip().replace("\n", " ")
         reviewers.append((steamid, pt, rid, text))
     reviewers.sort(key=lambda x: x[1], reverse=True)

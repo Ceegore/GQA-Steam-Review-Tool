@@ -5,6 +5,8 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from ..utils.coercion import safe_int
+
 COLUMNS: list[str] = [
     "recommendationid", "language", "voted_up", "votes_up",
     "votes_funny", "comment_count", "author_steamid",
@@ -16,7 +18,12 @@ COLUMNS: list[str] = [
 
 
 def reviews_to_csv(reviews: list[dict[str, Any]], dest_path: Path) -> int:
-    """Write ``reviews`` to a CSV file. Returns row count."""
+    """Write ``reviews`` to a CSV file. Returns row count.
+
+    All numeric columns are coerced through :func:`safe_int` so a
+    single review with a ``None`` / non-numeric ``votes_up`` /
+    ``timestamp_created`` cannot crash the whole export.
+    """
     with open(dest_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(COLUMNS)
@@ -26,14 +33,14 @@ def reviews_to_csv(reviews: list[dict[str, Any]], dest_path: Path) -> int:
                 str(r.get("recommendationid", "")),
                 str(r.get("language") or ""),
                 int(bool(r.get("voted_up"))),
-                int(r.get("votes_up", 0) or 0),
-                int(r.get("votes_funny", 0) or 0),
-                int(r.get("comment_count", 0) or 0),
+                safe_int(r, "votes_up", 0),
+                safe_int(r, "votes_funny", 0),
+                safe_int(r, "comment_count", 0),
                 str(author.get("steamid", "")),
-                int(author.get("playtime_forever", 0) or 0),
-                int(author.get("last_played", 0) or 0),
-                int(r.get("timestamp_created", 0) or 0),
-                int(r.get("timestamp_updated", 0) or 0),
+                safe_int(author, "playtime_forever", 0),
+                safe_int(author, "last_played", 0),
+                safe_int(r, "timestamp_created", 0),
+                safe_int(r, "timestamp_updated", 0),
                 str(r.get("weighted_vote_score", "")),
                 int(bool(r.get("steam_purchase"))),
                 int(bool(r.get("received_for_free"))),

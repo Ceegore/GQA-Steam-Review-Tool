@@ -13,6 +13,7 @@ from ..services.pre_ai_digest import (
     build_pre_ai_digest, quick_stats_footer,
 )
 from ..services.review_analyzer import classify_review_type, extract_tags
+from ..utils.coercion import safe_int
 from ..utils.markdown_utils import md_escape, ts_to_iso, yesno
 
 
@@ -167,7 +168,7 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
         f"| Purchase type | {purchase_badge} |",
         f"| Received for free | {yesno(r.get('received_for_free'))} |",
     ]
-    playtime = r.get("author", {}).get("playtime_forever", 0) or 0
+    playtime = safe_int(r.get("author", {}) or {}, "playtime_forever", 0)
     lines.append(f"| Playtime (minutes) | {playtime} (~{playtime/60:.1f} h) |")
     lines.append(f"| Last played | {ts_to_iso(r.get('author', {}).get('last_played'))} |")
     lines.append(f"| Helpful count | {r.get('votes_up', 0)} |")
@@ -225,7 +226,7 @@ def render_footer(reviews: list[dict[str, Any]]) -> list[str]:
         reviewers = []
         for r in reviews:
             a = r.get("author", {}) or {}
-            pt = int(a.get("playtime_forever", 0) or 0) / 60.0
+            pt = safe_int(a, "playtime_forever", 0) / 60.0
             steamid = str(a.get("steamid", ""))
             if steamid:
                 reviewers.append((

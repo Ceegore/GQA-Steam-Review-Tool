@@ -45,6 +45,7 @@ from typing import Any, Callable, Optional
 from ..core.constants import (
     ANTI_DETECT_JS, DEFAULT_USER_AGENT, PLAYWRIGHT_JS_WAIT_SEC,
 )
+from ..utils.coercion import safe_int
 from .python_runtime import find_external_python
 
 
@@ -321,12 +322,15 @@ def scrape_reviews_subprocess(
             if t == "log":
                 log(msg.get("text", ""))
             elif t == "progress" and progress_cb is not None:
-                try:
-                    progress_cb(int(msg.get("page", 0)),
-                                int(msg.get("fetched", 0)),
-                                int(msg.get("total", 0)))
-                except Exception:
-                    pass
+                # ``safe_int`` tolerates None / non-numeric progress
+                # fields from a buggy helper. The old bare ``int()``
+                # raised on None and was swallowed by the broad
+                # ``except``, silently displaying "0 / 0" to the user.
+                progress_cb(
+                    safe_int(msg, "page", 0),
+                    safe_int(msg, "fetched", 0),
+                    safe_int(msg, "total", 0),
+                )
             elif t == "review":
                 rv = msg.get("review")
                 if isinstance(rv, dict):

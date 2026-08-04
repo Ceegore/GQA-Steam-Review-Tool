@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from typing import Optional, Any
 
+from ..utils.coercion import safe_int
+
 # ---------------------------------------------------------------------------
 # Heuristic phrase lists
 # ---------------------------------------------------------------------------
@@ -34,13 +36,7 @@ def _safe_ts(r: dict[str, Any]) -> int:
     every function that does ``int(r.get("timestamp_created", 0))``
     crashes the whole export on a single malformed row.
     """
-    raw = r.get("timestamp_created")
-    if raw is None:
-        return 0
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return 0
+    return safe_int(r, "timestamp_created", 0)
 
 _BUG_PHRASES: list[str] = [
     "crash", "crashed", "freezes", "frozen", "stuck", "stuttering",
@@ -207,7 +203,7 @@ def compute_playtime_histogram(
     neg_hours = []
     for r in reviews:
         author = r.get("author", {}) or {}
-        pt = int(author.get("playtime_forever", 0) or 0) / 60.0
+        pt = safe_int(author, "playtime_forever", 0) / 60.0
         if r.get("voted_up"):
             pos_hours.append(pt)
         else:

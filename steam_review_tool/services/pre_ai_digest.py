@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Optional, Any
 
+from ..utils.coercion import safe_int
 from .review_analyzer import aggregate_top_themes, classify_review_type
 
 
@@ -64,7 +65,7 @@ def build_pre_ai_digest(
     reviewers = []
     for r in reviews:
         author = r.get("author", {}) or {}
-        pt = int(author.get("playtime_forever", 0) or 0) / 60.0
+        pt = safe_int(author, "playtime_forever", 0) / 60.0
         steamid = str(author.get("steamid", ""))
         if steamid:
             reviewers.append((

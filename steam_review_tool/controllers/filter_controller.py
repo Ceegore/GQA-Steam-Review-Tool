@@ -10,6 +10,7 @@ from time import time as _now
 from typing import Optional, Any
 
 from ..models.filter_config import FilterConfig
+from ..utils.coercion import safe_int
 from ..utils.datetime_utils import compute_since_timestamp
 
 
@@ -41,19 +42,10 @@ def build_filter_config(
 def _safe_ts(r: dict[str, Any]) -> int:
     """Coerce a review's ``timestamp_created`` into a plain int.
 
-    The Steam API normally returns an int, but normalised review
-    dicts (e.g. from the Apify client or a hand-rolled test) can
-    carry ``None`` or a non-numeric string. Treating those as
-    ``timestamp = 0`` keeps ``apply_window_filter`` from crashing
-    the whole export just because one review row is malformed.
+    Delegates to :func:`safe_int` so a single helper handles the
+    ``None`` / non-numeric edge case for every consumer.
     """
-    raw = r.get("timestamp_created")
-    if raw is None:
-        return 0
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return 0
+    return safe_int(r, "timestamp_created", 0)
 
 
 def apply_window_filter(
