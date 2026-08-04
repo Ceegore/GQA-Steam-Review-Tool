@@ -56,15 +56,16 @@ class TrendsWorkflow:
     def refresh_all_async(
         self,
         fetch_metrics: Callable[[int], Optional[TrendsSnapshot]],
-    ) -> None:
+    ) -> bool:
         # Only one refresh pass at a time; if the user clicks again
         # we skip rather than spawning concurrent workers that race
-        # on the trends.json file.
+        # on the trends.json file. Returns ``True`` if a new worker
+        # was started, ``False`` if a previous one is still running.
         with self._refresh_lock:
             if (self._refresh_worker
                     and self._refresh_worker.is_alive()):
                 self.log("A refresh is already running; ignored.")
-                return
+                return False
             def worker():
                 for app in self.list_tracked():
                     snap = fetch_metrics(app["app_id"])
@@ -75,6 +76,7 @@ class TrendsWorkflow:
                 target=worker, daemon=True,
             )
             self._refresh_worker.start()
+            return True
 
 
 __all__ = ["TrendsWorkflow"]

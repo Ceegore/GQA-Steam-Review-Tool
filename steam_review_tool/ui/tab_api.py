@@ -327,12 +327,19 @@ class ApiTabController(ActionStateMixin):
         if self.master.app_id is None:
             self._log("Load a game first."); return
         cfg = self._filter()
-        self.api_wf.start_fetch(
+        # Only subscribe the auto-export callback if the workflow
+        # actually started a new fetch. The old code subscribed
+        # unconditionally, so a second "Fetch new" click mid-fetch
+        # would double-subscribe — when the first fetch completed,
+        # both auto-export callbacks fired and the user got TWO
+        # exports.
+        if not self.api_wf.start_fetch(
             self.master.app_id, language=cfg.language,
             review_filter=cfg.review_filter, review_type=cfg.review_type,
             day_range=cfg.day_range, min_date_ts=cfg.min_date_ts,
             min_helpful=cfg.min_helpful, num_per_page=cfg.num_per_page,
-        )
+        ):
+            return
         bus.subscribe_once(self.api_wf.FETCH_COMPLETED,
                            self._auto_export_after_fetch)
 

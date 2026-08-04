@@ -61,11 +61,19 @@ class APIWorkflow:
         min_helpful: int = 0,
         num_per_page: int = 100,
         resume: bool = False,
-    ) -> None:
+    ) -> bool:
+        """Start a fetch worker. Returns ``True`` if a new worker was
+        started, ``False`` if a previous one is still running.
+
+        The boolean return lets the tab controller avoid subscribing
+        an auto-export callback for a click that was a no-op
+        (a duplicate "Fetch new" click mid-fetch would otherwise
+        double the auto-export when the first fetch completes).
+        """
         with self._worker_lock:
             if self._worker and self._worker.is_alive():
                 self.log("Fetch already running; ignored.")
-                return
+                return False
             # Reset the *shared* stop event for this new run.
             self._stop.clear()
             start_cursor = "*"
@@ -86,6 +94,7 @@ class APIWorkflow:
                 daemon=True,
             )
             self._worker.start()
+            return True
 
     def stop(self) -> None:
         self._stop.set()

@@ -93,11 +93,19 @@ class PlaywrightWorkflow:
         sort: str = "recent",
         max_reviews: int = 100,
         resume: bool = False,
-    ) -> None:
-        """Launch a headless Chromium and scrape reviews."""
+    ) -> bool:
+        """Launch a headless Chromium and scrape reviews. Returns
+        ``True`` if a new worker was started, ``False`` if a previous
+        one is still running.
+
+        The boolean return lets the tab controller avoid subscribing
+        an auto-export callback for a click that was a no-op (a
+        duplicate "Fetch new" click mid-scrape would otherwise
+        double the auto-export when the first scrape completes).
+        """
         if self._worker and self._worker.is_alive():
             self.log("A scrape is already running; ignored.")
-            return
+            return False
         self._stop.clear()
         bus.publish(self.SCRAPE_STARTED, app_id=app_id)
         self._worker = threading.Thread(
@@ -109,6 +117,7 @@ class PlaywrightWorkflow:
             daemon=True,
         )
         self._worker.start()
+        return True
 
     def _scrape_worker(
         self, *, app_id: int, language: str, sort: str,

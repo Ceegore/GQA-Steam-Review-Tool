@@ -318,7 +318,13 @@ class PlaywrightTabController(ActionStateMixin):
         if self.master.app_id is None:
             self._log("Load a game first.")
             return
-        self.pw_wf.scrape(
+        # Only subscribe the auto-export callback if the workflow
+        # actually started a new scrape. The old code subscribed
+        # unconditionally, so a second "Fetch new" click mid-scrape
+        # would double-subscribe — when the first scrape completed,
+        # both auto-export callbacks fired and the user got TWO
+        # exports.
+        if not self.pw_wf.scrape(
             self.master.app_id,
             language=(self.filter_refs.lang_var.get()
                       if self.filter_refs else "all"),
@@ -326,7 +332,8 @@ class PlaywrightTabController(ActionStateMixin):
                   if self.filter_refs else "recent"),
             max_reviews=(int(self.filter_refs.max_var.get())
                          if self.filter_refs else 100),
-        )
+        ):
+            return
         bus.subscribe_once(
             "pw.scrape.completed",
             self._auto_export_after_scrape,

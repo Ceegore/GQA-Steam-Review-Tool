@@ -224,7 +224,14 @@ class TrendsTabController:
                 followers=metrics.get("followers"),
                 reviews=metrics.get("reviews"),
             )
-        self.trends_wf.refresh_all_async(fetch_metrics)
+        # Only update the status label if the workflow actually
+        # accepted a new refresh. The old code always said
+        # "Refresh started…" even when the click was a no-op
+        # (a previous refresh was still running), which would
+        # mislead the user into thinking a refresh was in
+        # progress when none was.
+        if not self.trends_wf.refresh_all_async(fetch_metrics):
+            return
         if self._status_lbl is not None:
             self._status_lbl.configure(text="Refresh started…")
 
