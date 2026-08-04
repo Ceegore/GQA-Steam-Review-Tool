@@ -511,7 +511,6 @@ class ApiTabController(ActionStateMixin):
             self._dump_label.configure(text=f"📂 {new_root}")
         cls = type(self.master.dump_repo)
         self.master.dump_repo = cls(new_root)
-        self.api_wf.dump_root = new_root
 
 
 __all__ = ["ApiTabController"]

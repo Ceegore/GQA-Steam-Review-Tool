@@ -150,13 +150,33 @@ class SettingsDialog:
     def _save_and_close(self) -> None:
         kw_str = self._keywords_text.get("1.0", "end").strip() if self._keywords_text else ""
         kw_list = [k.strip() for k in kw_str.split(",") if k.strip()]
-        data = {
+        # Start from the current on-disk settings so the 5 fields
+        # the user can see in this dialog (dump_root /
+        # obsidian_vault / apify_token / keyword_list /
+        # ai_prompt_template) overwrite the matching keys but the
+        # OTHER fields the user set elsewhere (also_csv /
+        # also_json / per_language / open_after_export /
+        # greeting_shown) are preserved. The previous version
+        # built a 5-field dict from scratch and called
+        # ``settings_store.save(data)``, which overwrote the
+        # entire on-disk file with just those 5 keys — the
+        # next ``load()`` would then merge with ``DEFAULTS`` and
+        # silently reset the user's other preferences (e.g.
+        # ``also_csv=True`` was reset to ``False`` every time the
+        # user opened the settings dialog).
+        from ..services.settings_store import load as _load_settings
+        try:
+            current = _load_settings()
+        except OSError:
+            current = {}
+        current.update({
             "dump_root": self._dump_root_var.get() if self._dump_root_var else "",
             "obsidian_vault": self._obsidian_var.get() if self._obsidian_var else "",
             "apify_token": self._apify_var.get() if self._apify_var else "",
             "keyword_list": kw_list,
             "ai_prompt_template": self._ai_prompt_text.get("1.0", "end").strip(),
-        }
+        })
+        data = current
         try:
             settings_store.save(data)
         except OSError as exc:

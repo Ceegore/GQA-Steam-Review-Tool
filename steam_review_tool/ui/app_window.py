@@ -242,7 +242,6 @@ class App(ctk.CTk):
         if new_root_str:
             self.dump_repo = DumpRepository(new_root)
             self.dump_ctrl.set_dump_root(new_root)
-            self.api_wf.dump_root = new_root
         vault = data.get("obsidian_vault") or ""
         self.dump_ctrl.obsidian_vault = Path(vault) if vault else None
 

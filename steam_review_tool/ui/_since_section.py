@@ -6,6 +6,7 @@ identical "since" semantics.
 """
 from __future__ import annotations
 
+import logging
 from typing import Callable, Optional, Any
 
 import customtkinter as ctk
@@ -98,6 +99,20 @@ def build_since_section(
             try:
                 on_change()
             except Exception as exc:
+                # The previous version only forwarded the
+                # failure to ``log_fn`` (which is optional and
+                # typically None in this app). When the user
+                # didn't supply a log_fn, the exception was
+                # silently swallowed — the preset change
+                # "looked" applied but the dependent state
+                # (e.g. dump-folder label refresh) silently
+                # broke. Always log via the standard logger
+                # so the developer can spot the failure in
+                # stderr even when no log_fn is wired.
+                logging.getLogger(__name__).exception(
+                    "since-section on_change callback failed: %s: %s",
+                    type(exc).__name__, exc,
+                )
                 if log_fn is not None:
                     log_fn(f"since-section callback failed: {exc}")
 

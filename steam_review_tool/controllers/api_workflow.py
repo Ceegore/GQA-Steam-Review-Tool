@@ -37,7 +37,14 @@ class APIWorkflow:
         log_cb: Callable[[str], None],
     ) -> None:
         self.api = api
-        self.dump_root = dump_root
+        # ``dump_root`` is accepted for DI / back-compat with the
+        # factory wiring in ``app_factory.build_app`` but the
+        # workflow itself never reads it — the actual file
+        # writes (seen_ids ledger, .md export) happen through
+        # ``DumpFolderController.dump_root`` / ``dump_repo``,
+        # not through this attribute. Keeping the parameter
+        # avoids breaking the constructor signature for any
+        # external caller.
         self.log = log_cb
         self._stop = threading.Event()
         self._worker: Optional[threading.Thread] = None
