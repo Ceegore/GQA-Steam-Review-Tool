@@ -70,9 +70,15 @@ def build_summary(
     neg = total - pos
     pct = round(100 * pos / total, 1)
 
+    # ``r.get("language", "—")`` only fires when the key is missing.
+    # The Steam API and the Apify normaliser can both return a present
+    # key with value ``None`` for malformed review rows; treat those
+    # the same as "missing" so the language table is consistent
+    # (and ``None`` never becomes a dict key).
     langs: dict[str, int] = {}
     for r in reviews:
-        langs[r.get("language", "—")] = langs.get(r.get("language", "—"), 0) + 1
+        lang = r.get("language") or "—"
+        langs[lang] = langs.get(lang, 0) + 1
 
     purchases = {"steam": 0, "non_steam": 0, "unknown": 0}
     for r in reviews:

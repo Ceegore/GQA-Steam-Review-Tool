@@ -23,6 +23,25 @@ DEFAULT_KEYWORD_TAGS: list[str] = [
     "hacker", "exploit", "pay to win", "p2w", "microtransaction",
 ]
 
+
+def _safe_ts(r: dict[str, Any]) -> int:
+    """Coerce a review's ``timestamp_created`` to ``int``, returning
+    ``0`` for ``None`` or non-numeric values.
+
+    The Steam API normally returns an int, but normalised review
+    dicts (e.g. from the Apify client or a hand-rolled test) can
+    carry ``None`` or a non-numeric string. Without this helper,
+    every function that does ``int(r.get("timestamp_created", 0))``
+    crashes the whole export on a single malformed row.
+    """
+    raw = r.get("timestamp_created")
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
 _BUG_PHRASES: list[str] = [
     "crash", "crashed", "freezes", "frozen", "stuck", "stuttering",
     "fps drop", "low fps", "black screen", "won't launch", "wont launch",
@@ -215,9 +234,20 @@ def split_first_24h(reviews: list[dict[str, Any]]) -> dict[str, Any]:
     """Split reviews into 'first 24h' (after the earliest post) and 'after'."""
     if not reviews:
         return {"first_24h": [], "after": []}
-    timestamps = [int(r.get("timestamp_created", 0) or 0) for r in reviews]
-    if not timestamps:
-        return {"first_24h": [], "after": []}
+    # A list comprehension over a non-empty iterable always produces a
+    # non-empty list, so the previous ``if not timestamps:`` branch
+    # was dead code. Skip the unnecessary rebuild and just coerce
+    # each entry, tolerating ``None`` / non-numeric values.
+    timestamps: list[int] = []
+    for r in reviews:
+        raw = r.get("timestamp_created")
+        if raw is None:
+            timestamps.append(0)
+            continue
+        try:
+            timestamps.append(int(raw))
+        except (TypeError, ValueError):
+            timestamps.append(0)
     earliest = (
         min(t for t in timestamps if t > 0)
         if any(t > 0 for t in timestamps) else 0
@@ -227,11 +257,11 @@ def split_first_24h(reviews: list[dict[str, Any]]) -> dict[str, Any]:
     cutoff = earliest + 24 * 3600
     first_24h = [
         r for r in reviews
-        if earliest <= int(r.get("timestamp_created", 0) or 0) <= cutoff
+        if earliest <= _safe_ts(r) <= cutoff
     ]
     after = [
         r for r in reviews
-        if int(r.get("timestamp_created", 0) or 0) > cutoff
+        if _safe_ts(r) > cutoff
     ]
     return {"first_24h": first_24h, "after": after, "earliest_ts": earliest}
 

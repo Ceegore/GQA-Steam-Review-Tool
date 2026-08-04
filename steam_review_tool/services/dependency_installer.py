@@ -67,7 +67,17 @@ def install_playwright(
             return
 
         stderr = (result.stderr or "") + (result.stdout or "")
-        if "No module named pip" in stderr or "pip" in stderr.lower():
+        # Match the specific "pip is missing" signals (CPython prints
+        # one of these variants) — NOT a bare ``"pip"`` substring,
+        # which also matches legitimate install errors like
+        # "Could not install requirement pip-23.0.1" and would
+        # trigger a needless get-pip.py download.
+        pip_missing_signals = (
+            "No module named pip",
+            "No module named 'pip'",
+            "No module named \"pip\"",
+        )
+        if any(s in stderr for s in pip_missing_signals):
             log_cb("pip missing in target Python, bootstrapping from get-pip.py…")
             try:
                 tmp = Path(tempfile.gettempdir()) / "get-pip.py"

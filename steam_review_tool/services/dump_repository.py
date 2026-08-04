@@ -105,7 +105,7 @@ class DumpRepository:
         """Find the per-game folder for ``app_id`` and reuse its safe_name.
         Falls back to ``str(app_id)`` if the folder doesn't exist yet.
         """
-        if self.dump_root is None or not self.dump_root.exists():
+        if not self.dump_root.exists():
             return str(app_id)
         prefix = f"{app_id}_"
         try:

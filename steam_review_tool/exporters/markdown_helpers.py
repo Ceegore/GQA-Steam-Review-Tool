@@ -80,9 +80,16 @@ def render_summary(reviews: list[dict[str, Any]]) -> list[str]:
     pos = sum(1 for r in reviews if r.get("voted_up"))
     neg = total - pos
     pct = round(100 * pos / total, 1) if total else 0.0
+    # ``r.get("language", "—")`` only fires when the *key* is
+    # missing. The Steam API and the Apify normaliser can both
+    # return a present key with value ``None`` for malformed
+    # review rows; treat those the same as "missing" so the
+    # language table is consistent and ``None`` never becomes a
+    # ``dict`` key (which is invalid in JSON / Markdown tables).
     langs: dict[str, int] = {}
     for r in reviews:
-        langs[r.get("language", "—")] = langs.get(r.get("language", "—"), 0) + 1
+        lang = r.get("language") or "—"
+        langs[lang] = langs.get(lang, 0) + 1
 
     lines = [
         "## Summary",
@@ -153,7 +160,7 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
         f"| Recommendation | {'👍 Positive' if r.get('voted_up') else '👎 Negative'} |",
         f"| Author | `{author}` ([profile]({profile})) |",
         f"| Review URL | [link]({review_url}) |",
-        f"| Language | `{r.get('language', '—')}` |",
+        f"| Language | `{r.get('language') or '—'}` |",
         f"| Posted | {ts_to_iso(r.get('timestamp_created'))} |",
         f"| Updated | {ts_to_iso(r.get('timestamp_updated'))} |",
         f"| Written during early access? | {yesno(r.get('written_during_early_access'))} |",

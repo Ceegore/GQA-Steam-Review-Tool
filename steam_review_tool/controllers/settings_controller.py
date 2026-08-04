@@ -16,7 +16,14 @@ from ..ui.popup_settings import SettingsDialog
 class SettingsController:
     """Reactive settings store + UI binding."""
 
+    # Two distinct events: ``SETTINGS_CHANGED`` is published as soon
+    # as the user clicks "Save" (use it to *react* to the new
+    # settings, e.g. re-pick the dump root). ``SETTINGS_APPLIED`` is
+    # the post-everything signal that the dialog was dismissed with
+    # the values committed to disk — useful for status-bar updates
+    # that should not fire on transient in-progress edits.
     SETTINGS_CHANGED = "settings.changed"
+    SETTINGS_APPLIED = "settings.applied"
 
     def __init__(self, master) -> None:
         self.master = master
@@ -27,7 +34,7 @@ class SettingsController:
 
     def _on_saved(self, data: dict[str, Any]) -> None:
         bus.publish(self.SETTINGS_CHANGED, data=data)
-        bus.publish("settings.applied", data=data)
+        bus.publish(self.SETTINGS_APPLIED, data=data)
 
 
 __all__ = ["SettingsController"]

@@ -29,9 +29,16 @@ _write_lock = threading.Lock()
 
 
 class TrendsStore:
-    """Persistent time-series of popularity metrics per tracked app."""
+    """Persistent time-series of popularity metrics per tracked app.
 
-    def __init__(self, dump_root: Optional[Path] = None) -> None:
+    Backed by a single JSON file under the config dir
+    (see :data:`TRENDS_FILE`). The store is intentionally global —
+    the trends ledger is not per-game, so a ``dump_root`` parameter
+    (as the dump repository has) would be misleading. The constructor
+    takes no arguments for that reason.
+    """
+
+    def __init__(self) -> None:
         self.path = TRENDS_FILE
 
     # ---- low-level ----------------------------------------------------

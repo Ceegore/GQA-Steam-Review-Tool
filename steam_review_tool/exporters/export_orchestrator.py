@@ -125,7 +125,7 @@ def _write_csv_atomic(
         author = r.get("author", {}) or {}
         w.writerow([
             str(r.get("recommendationid", "")),
-            str(r.get("language", "")),
+            str(r.get("language") or ""),
             int(bool(r.get("voted_up"))),
             int(r.get("votes_up", 0) or 0),
             int(r.get("votes_funny", 0) or 0),

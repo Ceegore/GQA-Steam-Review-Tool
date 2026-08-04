@@ -38,6 +38,24 @@ def build_filter_config(
     )
 
 
+def _safe_ts(r: dict[str, Any]) -> int:
+    """Coerce a review's ``timestamp_created`` into a plain int.
+
+    The Steam API normally returns an int, but normalised review
+    dicts (e.g. from the Apify client or a hand-rolled test) can
+    carry ``None`` or a non-numeric string. Treating those as
+    ``timestamp = 0`` keeps ``apply_window_filter`` from crashing
+    the whole export just because one review row is malformed.
+    """
+    raw = r.get("timestamp_created")
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
 def apply_window_filter(
     reviews: list[dict[str, Any]], window: str,
 ) -> list[dict[str, Any]]:
@@ -50,15 +68,13 @@ def apply_window_filter(
     """
     if not reviews or window == "all":
         return reviews
-    ts = [int(r.get("timestamp_created", 0)) for r in reviews]
+    ts = [_safe_ts(r) for r in reviews]
     if window == "first 24h":
         t0 = min(ts) if ts else 0
-        return [r for r in reviews
-                if int(r.get("timestamp_created", 0)) < t0 + 86400]
+        return [r for r in reviews if _safe_ts(r) < t0 + 86400]
     if window == "last 7d":
         cutoff = int(_now()) - 7 * 86400
-        return [r for r in reviews
-                if int(r.get("timestamp_created", 0)) >= cutoff]
+        return [r for r in reviews if _safe_ts(r) >= cutoff]
     return reviews
 
 
