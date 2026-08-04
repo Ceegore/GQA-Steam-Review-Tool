@@ -119,7 +119,12 @@ def render_summary(reviews: list[dict[str, Any]]) -> list[str]:
         lines += ["**Language distribution:**", ""]
         lines += ["| Language | Reviews |", "|---|---|"]
         for k in sorted(langs, key=lambda _k: langs[_k], reverse=True):
-            lines.append(f"| {k} | {langs[k]} |")
+            # Escape ``k`` so a malformed language code (e.g.
+            # ``"en|US"``) doesn't break the table. The Steam
+            # API normally returns 2-5 letter codes but a
+            # hand-rolled / Apify-normalised review can carry
+            # an arbitrary string here.
+            lines.append(f"| {md_escape(k)} | {langs[k]} |")
         lines.append("")
     return lines
 
@@ -209,7 +214,13 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
     lines.append(f"| Comment count | {safe_int(r, 'comment_count', 0)} |")
     lines.append(
         f"| Review score (dev weight) | "
-        f"{safe_str(r, 'weighted_vote_score', '—')} |"
+        # ``md_escape`` so a hypothetical ``"0.5|0.7"`` score
+        # doesn't break the table — the safe_str default
+        # (``"—"``) doesn't contain ``|`` but a real float
+        # could in theory be a string with a ``|`` (e.g. a
+        # hand-rolled / migrated review with a non-standard
+        # score encoding).
+        f"{md_escape(safe_str(r, 'weighted_vote_score', '—'))} |"
     )
 
     try:
@@ -231,7 +242,13 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
     try:
         tags = extract_tags(r, keyword_list)
         if tags:
-            tag_line = " ".join(f"`{t}`" for t in tags)
+            # ``md_escape`` each tag so a keyword containing a
+            # ``|`` (the table-cell delimiter) doesn't break the
+            # row. The previous ``f"`{t}`"`` was safe for the
+            # common case (a normal keyword like "crash" or
+            # "fps") but a user who enters ``"fps|60"`` in
+            # their keyword list would produce a broken cell.
+            tag_line = " ".join(f"`{md_escape(t)}`" for t in tags)
             lines.append(f"| **Tags** | {tag_line} |")
     except Exception as exc:
         _log.warning(

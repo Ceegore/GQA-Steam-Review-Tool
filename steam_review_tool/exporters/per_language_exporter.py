@@ -7,6 +7,7 @@ from typing import Optional, Any
 
 from ..models.export_context import ExportContext
 from ..utils.coercion import safe_int, safe_str
+from ..utils.markdown_utils import md_escape
 from .markdown_exporter import MarkdownExporter
 
 
@@ -133,7 +134,10 @@ def build_summary(
     lines.append("| Language | Reviews |")
     lines.append("|---|---|")
     for k in sorted(langs, key=lambda _k: langs[_k], reverse=True):
-        lines.append(f"| {k} | {langs[k]} |")
+        # ``md_escape`` so a malformed language code containing
+        # ``|`` (the table-cell delimiter) doesn't break the
+        # row. Same R14 fix as the main ``render_summary``.
+        lines.append(f"| {md_escape(k)} | {langs[k]} |")
     lines.append("")
     lines.append("## Purchase type")
     lines.append("")
@@ -148,10 +152,16 @@ def build_summary(
     lines.append("|---|---|---|---|")
     for steamid, pt, rid, text in top10:
         preview = text[:80] + ("…" if len(text) > 80 else "")
+        # ``md_escape`` the preview so a review text containing
+        # ``|`` (the table-cell delimiter) doesn't break the
+        # row. The review is the user's free-form text and a
+        # Steam reviewer can write literally anything — a
+        # ``"the game | it's bad"`` sentence would otherwise
+        # spill into a phantom second column.
         lines.append(
             f"| `{steamid}` | {pt/60:.1f} | "
             f"[link](https://steamcommunity.com/profiles/{steamid}/review/{rid}) "
-            f"| {preview} |"
+            f"| {md_escape(preview)} |"
         )
     lines.append("")
     if top_words:

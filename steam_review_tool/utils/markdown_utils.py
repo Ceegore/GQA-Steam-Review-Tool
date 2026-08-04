@@ -6,10 +6,25 @@ from typing import Optional
 
 
 def md_escape(s: Optional[str]) -> str:
-    """Escape characters that would break Markdown tables / code blocks."""
+    """Escape characters that would break Markdown tables / code blocks.
+
+    The two characters that can break a Markdown table cell are
+    ``|`` (the column delimiter) and ``\\n`` (a literal newline
+    that the Markdown parser interprets as "end of row"). The
+    previous version also stripped ``\\r`` (carriage return). The
+    fix keeps the existing ``|`` and ``\\r`` handling and adds
+    ``\\n`` → space replacement so a multi-line game name (e.g.
+    ``"Foo\\nBar"``) renders as a single-row cell instead of
+    spilling into a phantom second row that the Markdown
+    renderer would interpret as a fresh table row.
+    """
     if s is None:
         return ""
-    return s.replace("|", "\\|").replace("\r", "")
+    return (
+        s.replace("|", "\\|")
+         .replace("\r", "")
+         .replace("\n", " ")
+    )
 
 
 def ts_to_iso(ts: Optional[int]) -> str:
