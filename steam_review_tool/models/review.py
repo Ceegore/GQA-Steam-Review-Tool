@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Any
 
+from ..utils.coercion import safe_int, safe_str
+
 
 @dataclass
 class Review:
@@ -22,19 +24,25 @@ class Review:
 
     @property
     def language(self) -> str:
-        return self.data.get("language", "")
+        return safe_str(self.data, "language", "")
 
     @property
     def timestamp_created(self) -> int:
-        return int(self.data.get("timestamp_created", 0))
+        # ``int(self.data.get("timestamp_created", 0))`` raised on a
+        # present-but-None value. The default branch only fires for
+        # missing keys.
+        return safe_int(self.data, "timestamp_created", 0)
 
     @property
     def review_id(self) -> str:
-        return self.data.get("recommendationid", "")
+        return safe_str(self.data, "recommendationid", "")
 
     @property
     def author_steamid(self) -> str:
-        return str(self.data.get("author", {}).get("steamid", ""))
+        # ``str(None)`` would render the literal "None" in
+        # downstream URLs (e.g. ``…/profiles/None``). The
+        # default branch of ``.get`` only fires for missing keys.
+        return safe_str(self.data.get("author", {}) or {}, "steamid", "")
 
 
 class ReviewSort:

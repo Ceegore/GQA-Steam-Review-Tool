@@ -13,7 +13,7 @@ from ..services.pre_ai_digest import (
     build_pre_ai_digest, quick_stats_footer,
 )
 from ..services.review_analyzer import classify_review_type, extract_tags
-from ..utils.coercion import safe_int
+from ..utils.coercion import safe_int, safe_str
 from ..utils.markdown_utils import md_escape, ts_to_iso, yesno
 
 
@@ -171,10 +171,13 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
     playtime = safe_int(r.get("author", {}) or {}, "playtime_forever", 0)
     lines.append(f"| Playtime (minutes) | {playtime} (~{playtime/60:.1f} h) |")
     lines.append(f"| Last played | {ts_to_iso(r.get('author', {}).get('last_played'))} |")
-    lines.append(f"| Helpful count | {r.get('votes_up', 0)} |")
-    lines.append(f"| Funny count | {r.get('votes_funny', 0)} |")
-    lines.append(f"| Comment count | {r.get('comment_count', 0)} |")
-    lines.append(f"| Review score (dev weight) | {r.get('weighted_vote_score', '—')} |")
+    lines.append(f"| Helpful count | {safe_int(r, 'votes_up', 0)} |")
+    lines.append(f"| Funny count | {safe_int(r, 'votes_funny', 0)} |")
+    lines.append(f"| Comment count | {safe_int(r, 'comment_count', 0)} |")
+    lines.append(
+        f"| Review score (dev weight) | "
+        f"{safe_str(r, 'weighted_vote_score', '—')} |"
+    )
 
     try:
         rtype = classify_review_type(r)
@@ -227,11 +230,11 @@ def render_footer(reviews: list[dict[str, Any]]) -> list[str]:
         for r in reviews:
             a = r.get("author", {}) or {}
             pt = safe_int(a, "playtime_forever", 0) / 60.0
-            steamid = str(a.get("steamid", ""))
+            steamid = safe_str(a, "steamid", "")
             if steamid:
                 reviewers.append((
                     pt, steamid,
-                    str(r.get("recommendationid", "")),
+                    safe_str(r, "recommendationid", ""),
                     a.get("playtime_at_review", 0),
                 ))
         reviewers.sort(key=lambda x: -x[0])

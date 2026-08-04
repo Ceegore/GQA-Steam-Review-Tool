@@ -18,6 +18,7 @@ from ..core.atomic_write import atomic_write_json, load_json_with_recovery
 from ..core.logger import get_logger
 from ..core.paths import ensure_config_dir
 from ..models.trends_snapshot import TrendsSnapshot
+from ..utils.coercion import safe_int
 
 _log = get_logger(__name__)
 
@@ -115,7 +116,7 @@ class TrendsStore:
                 continue
             out.append(TrendsSnapshot(
                 app_id=app_id,
-                ts=int(s.get("ts", 0)),
+                ts=safe_int(s, "ts", 0),
                 wishlist=s.get("wishlist"),
                 followers=s.get("followers"),
                 reviews=s.get("reviews"),

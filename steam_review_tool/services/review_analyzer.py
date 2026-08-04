@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Optional, Any
 
-from ..utils.coercion import safe_int
+from ..utils.coercion import safe_int, safe_str
 
 # ---------------------------------------------------------------------------
 # Heuristic phrase lists
@@ -187,9 +187,11 @@ def aggregate_top_themes(
                     else:
                         snippet = raw[:120] + ("…" if len(raw) > 120 else "")
                     counts[phrase]["sample_quote"] = snippet
-                    counts[phrase]["sample_author"] = author.get("steamid", "")
-                    counts[phrase]["sample_rid"] = str(
-                        r.get("recommendationid", "")
+                    counts[phrase]["sample_author"] = safe_str(
+                        author, "steamid", "",
+                    )
+                    counts[phrase]["sample_rid"] = safe_str(
+                        r, "recommendationid", "",
                     )
     out = sorted(counts.values(), key=lambda x: x["count"], reverse=True)
     return out[:top_n]
@@ -267,12 +269,12 @@ def compute_deltas(
 ) -> dict[str, Any]:
     """Compare two review sets by ``recommendationid``."""
     old_ids = {
-        str(r.get("recommendationid", ""))
+        safe_str(r, "recommendationid", "")
         for r in old_reviews if r.get("recommendationid")
     }
     new_only = [
         r for r in new_reviews
-        if str(r.get("recommendationid", "")) not in old_ids
+        if safe_str(r, "recommendationid", "") not in old_ids
     ]
     pos = sum(1 for r in new_only if r.get("voted_up"))
     return {

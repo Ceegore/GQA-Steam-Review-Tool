@@ -14,6 +14,21 @@ import customtkinter as ctk
 from ..services import settings_store
 
 
+def _safe_str(value: Any, default: str = "") -> str:
+    """Coerce a settings value to ``str``, defaulting on None.
+
+    Settings JSON may have present-but-None values (e.g. a key
+    that was explicitly set to null by a hand-edit or migration).
+    ``tk.StringVar(value=None)`` would set the value to the literal
+    string ``"None"`` (Tk's str-coercion), which is a confusing
+    default to show the user. This helper collapses None into
+    the empty default.
+    """
+    if value is None:
+        return default
+    return str(value)
+
+
 class SettingsDialog:
     """A modal for editing user preferences."""
 
@@ -49,7 +64,9 @@ class SettingsDialog:
         ctk.CTkLabel(body, text="Dump folder", font=("", 12, "bold")).pack(
             anchor="w", padx=4, pady=(6, 2),
         )
-        self._dump_root_var = tk.StringVar(value=data.get("dump_root", ""))
+        self._dump_root_var = tk.StringVar(
+            value=_safe_str(data.get("dump_root"), ""),
+        )
         ctk.CTkEntry(body, textvariable=self._dump_root_var, width=500).pack(
             fill="x", padx=4, pady=2,
         )
@@ -58,7 +75,9 @@ class SettingsDialog:
         ctk.CTkLabel(body, text="Obsidian vault (optional)", font=("", 12, "bold")).pack(
             anchor="w", padx=4, pady=(10, 2),
         )
-        self._obsidian_var = tk.StringVar(value=data.get("obsidian_vault", ""))
+        self._obsidian_var = tk.StringVar(
+            value=_safe_str(data.get("obsidian_vault"), ""),
+        )
         ctk.CTkEntry(body, textvariable=self._obsidian_var, width=500).pack(
             fill="x", padx=4, pady=2,
         )
@@ -67,7 +86,9 @@ class SettingsDialog:
         ctk.CTkLabel(body, text="Apify token (optional)", font=("", 12, "bold")).pack(
             anchor="w", padx=4, pady=(10, 2),
         )
-        self._apify_var = tk.StringVar(value=data.get("apify_token", ""))
+        self._apify_var = tk.StringVar(
+            value=_safe_str(data.get("apify_token"), ""),
+        )
         ctk.CTkEntry(body, textvariable=self._apify_var, width=500, show="•").pack(
             fill="x", padx=4, pady=2,
         )
@@ -87,7 +108,9 @@ class SettingsDialog:
         )
         self._ai_prompt_text = ctk.CTkTextbox(body, height=120)
         self._ai_prompt_text.pack(fill="x", padx=4, pady=2)
-        self._ai_prompt_text.insert("1.0", data.get("ai_prompt_template", ""))
+        self._ai_prompt_text.insert(
+            "1.0", _safe_str(data.get("ai_prompt_template"), ""),
+        )
 
         # ---- Buttons -------------------------------------------------
         btns = ctk.CTkFrame(top, fg_color="transparent")

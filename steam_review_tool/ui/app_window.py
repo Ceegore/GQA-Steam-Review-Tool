@@ -202,7 +202,10 @@ class App(ctk.CTk):
         return default_dump_root()
 
     def _obsidian_path(self) -> Optional[Path]:
-        v = self.settings.get("obsidian_vault", "")
+        # ``or ""`` collapses a present-but-None vault value
+        # (e.g. a hand-edited settings.json) into the missing-key
+        # default so ``Path(None)`` doesn't raise below.
+        v = self.settings.get("obsidian_vault") or ""
         return Path(v) if v else None
 
     # ---- logging -----------------------------------------------------
@@ -230,13 +233,17 @@ class App(ctk.CTk):
             panel.update(app_id, app_details)
 
     def _on_settings_changed(self, *, data: dict[str, Any]) -> None:
-        # Re-bind dump root
-        new_root = Path(data.get("dump_root", ""))
-        if new_root:
+        # Re-bind dump root. ``Path(None)`` raises TypeError, so use
+        # the ``or ""`` short-circuit to collapse a present-but-None
+        # value (e.g. a hand-edited or migrated settings.json) into
+        # the missing-key default.
+        new_root_str = data.get("dump_root") or ""
+        new_root = Path(new_root_str)
+        if new_root_str:
             self.dump_repo = DumpRepository(new_root)
             self.dump_ctrl.set_dump_root(new_root)
             self.api_wf.dump_root = new_root
-        vault = data.get("obsidian_vault", "")
+        vault = data.get("obsidian_vault") or ""
         self.dump_ctrl.obsidian_vault = Path(vault) if vault else None
 
     # ---- menu / close ------------------------------------------------

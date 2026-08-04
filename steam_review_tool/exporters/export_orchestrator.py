@@ -11,7 +11,7 @@ from typing import Callable, Optional, Any
 
 from ..core.atomic_write import atomic_write_text
 from ..models.export_context import ExportContext
-from ..utils.coercion import safe_int
+from ..utils.coercion import safe_int, safe_str
 from .csv_exporter import reviews_to_csv
 from .json_exporter import reviews_to_json
 from .markdown_exporter import MarkdownExporter
@@ -125,18 +125,18 @@ def _write_csv_atomic(
     for r in reviews:
         author = r.get("author", {}) or {}
         w.writerow([
-            str(r.get("recommendationid", "")),
+            safe_str(r, "recommendationid", ""),
             str(r.get("language") or ""),
             int(bool(r.get("voted_up"))),
             safe_int(r, "votes_up", 0),
             safe_int(r, "votes_funny", 0),
             safe_int(r, "comment_count", 0),
-            str(author.get("steamid", "")),
+            safe_str(author, "steamid", ""),
             safe_int(author, "playtime_forever", 0),
             safe_int(author, "last_played", 0),
             safe_int(r, "timestamp_created", 0),
             safe_int(r, "timestamp_updated", 0),
-            str(r.get("weighted_vote_score", "")),
+            str(r.get("weighted_vote_score", "") or ""),
             int(bool(r.get("steam_purchase"))),
             int(bool(r.get("received_for_free"))),
             int(bool(r.get("written_during_early_access"))),

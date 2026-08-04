@@ -84,4 +84,49 @@ def safe_coerce_int(value: Any, default: int = 0) -> int:
     return default
 
 
-__all__ = ["safe_int", "safe_coerce_int"]
+def safe_str(
+    source: Any,
+    key: str,
+    default: str = "",
+) -> str:
+    """Read ``source[key]`` and coerce to ``str``, falling back to
+    ``default`` on any failure.
+
+    Critical: ``str(None)`` returns ``"None"`` (the literal string), which
+    is a real bug source when None-valued fields are used to build URLs
+    (e.g. ``f"https://steamcommunity.com/profiles/{steamid}"`` produces
+    ``"…/profiles/None"``). The default branch of ``.get`` only fires
+    for missing keys, so a present-but-None value also needs the
+    ``or default`` pattern — this helper consolidates both.
+
+    Returns:
+    - ``default`` if the key is missing or the source is not indexable
+    - ``default`` if the value is ``None`` (the common bug case)
+    - ``str(value)`` for ints, floats, bools, lists, dicts
+    - the string itself for str values (whitespace-stripped, falls
+      back to ``default`` on empty / whitespace-only strings)
+    """
+    if source is None:
+        return default
+    try:
+        value = source[key]
+    except (KeyError, TypeError, IndexError):
+        return default
+    return safe_coerce_str(value, default)
+
+
+def safe_coerce_str(value: Any, default: str = "") -> str:
+    """Coerce a single ``value`` to ``str``, falling back to ``default``."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        s = value.strip()
+        return s if s else default
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    if isinstance(value, (list, dict, tuple)):
+        return default
+    return default
+
+
+__all__ = ["safe_int", "safe_coerce_int", "safe_str", "safe_coerce_str"]
