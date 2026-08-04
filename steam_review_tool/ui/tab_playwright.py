@@ -58,6 +58,7 @@ class PlaywrightTabController(ActionStateMixin):
         self._actions = TabActions(
             master=master, dump_ctrl=dump_ctrl, log_fn=log_fn,
             open_settings_fn=open_settings_fn,
+            fetch_item=self._fetch_item,
         )
 
         # ---- Widget state --------------------------------------------
@@ -326,6 +327,31 @@ class PlaywrightTabController(ActionStateMixin):
         # exports.
         if not self.pw_wf.scrape(
             self.master.app_id,
+            language=(self.filter_refs.lang_var.get()
+                      if self.filter_refs else "all"),
+            sort=(self.filter_refs.sort_var.get()
+                  if self.filter_refs else "recent"),
+            max_reviews=(int(self.filter_refs.max_var.get())
+                         if self.filter_refs else 100),
+        ):
+            return
+        bus.subscribe_once(
+            "pw.scrape.completed",
+            self._auto_export_after_scrape,
+        )
+
+    def _fetch_item(self, app_id: int) -> None:
+        """Per-item fetch callback for the batch-dump dialog.
+
+        Re-uses the same scrape + auto-export wiring as
+        ``_on_fetch_new`` so the batch dialog iterates over
+        queued app IDs and each one triggers a real scrape +
+        auto-export. Previously the batch dialog published
+        ``batch.run_item`` to the bus but no one subscribed —
+        the batch feature was completely non-functional.
+        """
+        if not self.pw_wf.scrape(
+            app_id,
             language=(self.filter_refs.lang_var.get()
                       if self.filter_refs else "all"),
             sort=(self.filter_refs.sort_var.get()

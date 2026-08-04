@@ -15,7 +15,6 @@ from ..controllers.action_handler import (
     copy_to_clipboard, find_latest_dump_md, open_in_editor, open_store_page,
 )
 from ..controllers.dump_folder_controller import DumpFolderController
-from ..core.event_bus import bus
 from ..exporters.per_language_exporter import build_summary
 from ..services import settings_store
 from .popup_batch_dump import BatchDumpDialog
@@ -33,11 +32,20 @@ class TabActions:
         dump_ctrl: DumpFolderController,
         log_fn: Callable[[str], None],
         open_settings_fn: Optional[Callable[[], None]] = None,
+        fetch_item: Optional[Callable[[int], None]] = None,
     ) -> None:
         self.master = master
         self.dump_ctrl = dump_ctrl
         self._log = log_fn
         self._open_settings = open_settings_fn or (lambda: None)
+        # ``fetch_item`` does the per-app fetch for the batch-dump
+        # dialog. The tab controller passes a closure that wires
+        # its own workflow (api_wf.start_fetch or pw_wf.scrape)
+        # plus the auto-export subscribe_once. The old code
+        # published ``batch.run_item`` to the bus but no one
+        # subscribed — the batch-dump feature was completely
+        # non-functional.
+        self._fetch_item = fetch_item or (lambda _app_id: None)
 
     # ---- store page --------------------------------------------------
 
@@ -96,9 +104,16 @@ class TabActions:
     def batch_dump(self) -> None:
         dialog = BatchDumpDialog(self.master)
         dialog.open(
-            on_run_item=lambda app_id: bus.publish(
-                "batch.run_item", app_id=app_id,
-            ),
+            # Previously this published ``batch.run_item`` to the
+            # bus, but no one subscribed — the batch dump feature
+            # was completely broken (the dialog iterated over the
+            # queued app IDs, called ``on_run_item`` for each, and
+            # the publish went nowhere). The fix: the tab
+            # controller injects a ``fetch_item`` callable that
+            # does the actual fetch + auto-export subscription
+            # (see ``ApiTabController._build`` and
+            # ``PlaywrightTabController._build``).
+            on_run_item=self._fetch_item,
             get_current_app_id=lambda: self.master.app_id,
         )
 

@@ -60,6 +60,7 @@ class ApiTabController(ActionStateMixin):
         self._actions = TabActions(
             master=master, dump_ctrl=dump_ctrl, log_fn=log_fn,
             open_settings_fn=open_settings_fn,
+            fetch_item=self._fetch_item,
         )
         # Widget refs (filled in _build)
         self._app_id_entry: Optional[ctk.CTkEntry] = None
@@ -335,6 +336,27 @@ class ApiTabController(ActionStateMixin):
         # exports.
         if not self.api_wf.start_fetch(
             self.master.app_id, language=cfg.language,
+            review_filter=cfg.review_filter, review_type=cfg.review_type,
+            day_range=cfg.day_range, min_date_ts=cfg.min_date_ts,
+            min_helpful=cfg.min_helpful, num_per_page=cfg.num_per_page,
+        ):
+            return
+        bus.subscribe_once(self.api_wf.FETCH_COMPLETED,
+                           self._auto_export_after_fetch)
+
+    def _fetch_item(self, app_id: int) -> None:
+        """Per-item fetch callback for the batch-dump dialog.
+
+        Re-uses the same fetch + auto-export wiring as
+        ``_on_fetch_new`` so the batch dialog iterates over
+        queued app IDs and each one triggers a real fetch +
+        auto-export. Previously the batch dialog published
+        ``batch.run_item`` to the bus but no one subscribed —
+        the batch feature was completely non-functional.
+        """
+        cfg = self._filter()
+        if not self.api_wf.start_fetch(
+            app_id, language=cfg.language,
             review_filter=cfg.review_filter, review_type=cfg.review_type,
             day_range=cfg.day_range, min_date_ts=cfg.min_date_ts,
             min_helpful=cfg.min_helpful, num_per_page=cfg.num_per_page,

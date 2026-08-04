@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, Any
 
 from ..models.export_context import ExportContext
-from ..utils.coercion import safe_int
+from ..utils.coercion import safe_int, safe_str
 from .markdown_exporter import MarkdownExporter
 
 
@@ -93,8 +93,15 @@ def build_summary(
     reviewers: list[tuple[str, int, str, str]] = []
     for r in reviews:
         author = r.get("author", {}) or {}
-        rid = str(r.get("recommendationid", "—"))
-        steamid = str(author.get("steamid", "—"))
+        # ``safe_str`` collapses a present-but-None value into
+        # the missing-key default. The old ``str(... .get(...,
+        # "—"))`` pattern rendered the literal ``"None"`` for
+        # present-but-None fields — same R5-1 bug that the
+        # main export pipeline caught. The downstream URL
+        # ``f"…/profiles/{steamid}/review/{rid}"`` then
+        # contained the literal ``None`` substring.
+        rid = safe_str(r, "recommendationid", "—")
+        steamid = safe_str(author, "steamid", "—")
         pt = safe_int(author, "playtime_forever", 0)
         text = (r.get("review") or "").strip().replace("\n", " ")
         reviewers.append((steamid, pt, rid, text))
