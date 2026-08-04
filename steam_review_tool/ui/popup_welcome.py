@@ -154,7 +154,11 @@ class WelcomeDialog:
         scroll = ctk.CTkScrollbar(body_frame, command=text.yview)
         text.configure(yscrollcommand=scroll.set)
         text.insert("1.0", WELCOME_BODY)
-        text.configure(state="disabled")
+        # ``state="readonly"`` lets the user select and copy the
+        # welcome text (e.g. the URL for filing a bug report) but
+        # prevents accidental edits. The old ``state="disabled"``
+        # made the widget completely non-interactive.
+        text.configure(state="readonly")
         text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 

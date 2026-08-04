@@ -67,7 +67,12 @@ class TopComplaintsDialog:
                     f"• {t['theme']} ({t['count']}×) — \"{t['sample_quote']}\""
                 )
             box.insert("1.0", "\n".join(lines))
-            box.configure(state="disabled")
+            # ``state="readonly"`` lets the user select and copy
+            # the top-complaint quotes (e.g. for a bug report) but
+            # prevents accidental edits. The old
+            # ``state="disabled"`` made the widget completely
+            # non-interactive.
+            box.configure(state="readonly")
 
         # Playtime histogram
         ctk.CTkLabel(top, text="Playtime distribution", font=("", 12, "bold")).pack(
@@ -81,7 +86,7 @@ class TopComplaintsDialog:
                 f"  {label}: {vals['pos']} positive / {vals['neg']} negative"
                 for label, vals in hist.items()
             ))
-            box.configure(state="disabled")
+            box.configure(state="readonly")
 
         ctk.CTkButton(top, text="Close", command=top.destroy).pack(pady=(10, 8))
 

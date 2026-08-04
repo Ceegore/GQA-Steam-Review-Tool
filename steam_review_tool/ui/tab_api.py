@@ -458,6 +458,15 @@ class ApiTabController(ActionStateMixin):
             minutes = int(self.filter_refs.interval_var.get()) if self.filter_refs else 5
         except ValueError:
             minutes = 5
+        # Snapshot the GUI state on the main thread so the worker
+        # thread doesn't need to read CTk StringVars (which is
+        # undefined behavior from a non-main thread). The watch
+        # uses these snapshots for the lifetime of the worker;
+        # changing the language / auto-incr toggle while the
+        # watch is running requires a stop+start.
+        lang = (self.filter_refs.lang_var.get()
+                if self.filter_refs else "all")
+        auto_incr = self.auto_incr_var.get() == "1"
         self._watching = True
         if self._action_refs.watch_btn is not None:
             self._action_refs.watch_btn.configure(text="■ Stop Watching")
@@ -466,12 +475,22 @@ class ApiTabController(ActionStateMixin):
             while not self._watch_stop.is_set():
                 new_reviews = self.api_wf.api.poll_recent_reviews(
                     self.master.app_id, max_pages=2, page_size=100,
-                    language=(self.filter_refs.lang_var.get()
-                              if self.filter_refs else "all"),
+                    language=lang,
                 )
                 if new_reviews:
-                    self._log(f"[watch] +{len(new_reviews)} new review(s).")
-                    if self.auto_incr_var.get() == "1":
+                    # Route the GUI update through the main
+                    # thread's event loop (``self.after(0, fn)``).
+                    # Calling ``self._log_box.configure(...)``
+                    # directly from the worker thread is Tk
+                    # undefined behavior — can crash the GUI,
+                    # freeze the window, or silently drop the
+                    # message. ``self.after(0, ...)`` is the
+                    # thread-safe pattern: the function is
+                    # scheduled on the main thread.
+                    self.after(0, lambda r=new_reviews: self._log(
+                        f"[watch] +{len(r)} new review(s)."
+                    ))
+                    if auto_incr:
                         bus.publish(self.api_wf.FETCH_COMPLETED,
                                     app_id=self.master.app_id,
                                     reviews=new_reviews)

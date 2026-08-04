@@ -98,7 +98,12 @@ class HelpDialog:
         scroll = ctk.CTkScrollbar(frame, command=text.yview)
         text.configure(yscrollcommand=scroll.set)
         text.insert("1.0", HELP_TEXT)
-        text.configure(state="disabled")
+        # ``state="readonly"`` lets the user select and copy the
+        # help text (right-click → Copy, or Ctrl+C) but prevents
+        # accidental edits. The old ``state="disabled"`` made
+        # the widget completely non-interactive, so the user
+        # couldn't even select a snippet to copy into a search.
+        text.configure(state="readonly")
         text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 

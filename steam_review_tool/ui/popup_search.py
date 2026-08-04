@@ -223,10 +223,17 @@ class SearchWindow:
     def _set_results(self, text: str) -> None:
         if self._results_box is None:
             return
+        # Toggle to ``normal`` for the insert, then back to
+        # ``readonly`` so the user can select and copy the
+        # matching review blocks (e.g. for a bug report) but
+        # cannot accidentally edit them. The old
+        # ``state="disabled"`` made the widget completely
+        # non-interactive — the user couldn't even select a
+        # snippet to copy.
         self._results_box.configure(state="normal")
         self._results_box.delete("1.0", "end")
         self._results_box.insert("1.0", text)
-        self._results_box.configure(state="disabled")
+        self._results_box.configure(state="readonly")
 
 
 __all__ = ["SearchWindow"]
