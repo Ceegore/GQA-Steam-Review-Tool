@@ -67,7 +67,17 @@ def copy_to_clipboard(root, text: str) -> None:
 
 
 def find_latest_dump_md(dump_root: Path) -> Optional[Path]:
-    """Return the most recently modified ``.md`` file under ``dump_root``.
+    """Return the most recently modified ``GQA Reviewdump_*.md`` file
+    under ``dump_root``.
+
+    Filters to the canonical export-name pattern
+    (``GQA Reviewdump_*.md``) so the "latest" file is always a real
+    export, not a per-language split (``.english.md``), the
+    standalone summary (``.summary.md``), the AI-prompt bundle
+    (``ai_prompt.md``), or a user-created readme. The old code
+    returned ANY ``.md`` file, which made the "Open latest .md"
+    and "Search" actions randomly open the AI-prompt bundle
+    after a "Save as prompt" run — confusing for the user.
 
     Uses ``os.scandir`` for speed (avoids the O(n) stat-everything
     walk that ``Path.rglob`` performs), and short-circuits as soon
@@ -89,7 +99,7 @@ def find_latest_dump_md(dump_root: Path) -> Optional[Path]:
                     try:
                         if entry.is_dir(follow_symlinks=False):
                             stack.append(Path(entry.path))
-                        elif entry.name.endswith(".md"):
+                        elif _is_dump_export_md(entry.name):
                             try:
                                 mt = entry.stat(follow_symlinks=False).st_mtime
                             except OSError:
@@ -102,6 +112,23 @@ def find_latest_dump_md(dump_root: Path) -> Optional[Path]:
         except OSError:
             continue
     return best
+
+
+def _is_dump_export_md(name: str) -> bool:
+    """``True`` if ``name`` is a canonical export dump file.
+
+    The exporter names every main dump ``GQA Reviewdump_<game>_
+    <filter>_<YYYYMMDD-HHMM>.md``. Per-language splits add a
+    second dot (``.english.md``), the standalone summary adds
+    ``.summary.md``, and the AI-prompt bundle is ``ai_prompt.md``
+    — all of which should NOT be returned as "the latest dump".
+    """
+    if not name.startswith("GQA Reviewdump_") or not name.endswith(".md"):
+        return False
+    # The part before ``.md`` must be the timestamp stem — no
+    # extra dots (which would mean per-language / summary).
+    stem = name[:-3]  # strip ".md"
+    return "." not in stem
 
 
 __all__ = [

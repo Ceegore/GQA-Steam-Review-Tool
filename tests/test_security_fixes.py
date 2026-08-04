@@ -270,8 +270,8 @@ def test_open_in_editor_missing_path(tmp_path):
 def test_find_latest_dump_md_picks_newest(tmp_path):
     from steam_review_tool.controllers.action_handler import find_latest_dump_md
     import time
-    a = tmp_path / "a.md"
-    b = tmp_path / "b.md"
+    a = tmp_path / "GQA Reviewdump_Game1_all_20260804-1200.md"
+    b = tmp_path / "GQA Reviewdump_Game1_all_20260804-1300.md"
     a.write_text("a")
     time.sleep(0.01)
     b.write_text("b")
@@ -283,10 +283,10 @@ def test_find_latest_dump_md_recurses(tmp_path):
     import time
     sub = tmp_path / "sub"
     sub.mkdir()
-    top = tmp_path / "top.md"
+    top = tmp_path / "GQA Reviewdump_Game1_all_20260804-1200.md"
     top.write_text("top")
     time.sleep(0.01)
-    nested = sub / "deep.md"
+    nested = sub / "GQA Reviewdump_Game1_all_20260804-1300.md"
     nested.write_text("deep")
     assert find_latest_dump_md(tmp_path) == nested
 

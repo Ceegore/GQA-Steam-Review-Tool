@@ -297,11 +297,24 @@ class App(ctk.CTk):
         # Signal workers to stop first, then wait briefly for any
         # in-flight worker to flush its current page to disk.
         # Without this we could quit mid-write and leave a partial
-        # cursor in resume.json.
+        # cursor in resume.json. The Playwright tab has its own
+        # worker that was previously NOT awaited on close — a real
+        # partial-write risk for the playwright helper script
+        # (subprocess temp file) and any in-flight export.
         self.api_wf.stop()
         self.pw_wf.stop()
         if hasattr(self.api_wf, "wait"):
             self.api_wf.wait(timeout=3.0)
+        if hasattr(self.pw_wf, "wait"):
+            self.pw_wf.wait(timeout=3.0)
+        # Also wait for the API tab's watch-mode thread if it's
+        # still running — the daemon=True flag would let the
+        # process exit mid-iteration otherwise, potentially
+        # leaving the watch loop to write a stale "0 / 0"
+        # progress line after the main window is destroyed.
+        watch = getattr(self.tab_api_ctrl, "_watch_thread", None)
+        if watch is not None and watch.is_alive():
+            watch.join(timeout=2.0)
         self.destroy()
 
     # ---- clock -------------------------------------------------------
