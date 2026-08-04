@@ -133,7 +133,13 @@ def highlight_keywords(text: str, keyword_list: Optional[list[Any]]) -> str:
 
 def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]) -> list[str]:
     """Render one review block (table + body + footer separator)."""
-    author = r.get("author", {}).get("steamid") or "—"
+    # ``r.get("author", {})`` only returns ``{}`` for a MISSING key.
+    # A present-but-None ``author`` (e.g. from a hand-rolled review
+    # dict) would fall through to ``None.get("steamid")`` and crash.
+    # The trailing ``or {}`` collapses that case into the empty dict
+    # so the subsequent ``.get`` is safe. Same pattern below for
+    # ``last_played``.
+    author = (r.get("author") or {}).get("steamid") or "—"
     profile = (
         f"https://steamcommunity.com/profiles/{author}"
         if author != "—" else "—"
@@ -170,7 +176,9 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
     ]
     playtime = safe_int(r.get("author", {}) or {}, "playtime_forever", 0)
     lines.append(f"| Playtime (minutes) | {playtime} (~{playtime/60:.1f} h) |")
-    lines.append(f"| Last played | {ts_to_iso(r.get('author', {}).get('last_played'))} |")
+    # ``or {}`` collapses a present-but-None ``author`` into a
+    # empty dict (see the matching fix on line 136).
+    lines.append(f"| Last played | {ts_to_iso((r.get('author') or {}).get('last_played'))} |")
     lines.append(f"| Helpful count | {safe_int(r, 'votes_up', 0)} |")
     lines.append(f"| Funny count | {safe_int(r, 'votes_funny', 0)} |")
     lines.append(f"| Comment count | {safe_int(r, 'comment_count', 0)} |")

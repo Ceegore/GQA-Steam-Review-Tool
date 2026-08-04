@@ -45,7 +45,10 @@ def save_all(data: dict[str, Any]) -> None:
 
 def get(source: str, app_id: int) -> Optional[dict[str, Any]]:
     """Return the resume-cursor entry for ``(source, app_id)`` or ``None``."""
-    return load_all().get(source, {}).get(str(app_id))
+    # ``or {}`` collapses a present-but-None ``source`` (e.g. from
+    # a hand-edited resume.json) into an empty dict so the chained
+    # ``.get(str(app_id))`` doesn't crash on ``None.get``.
+    return (load_all().get(source) or {}).get(str(app_id))
 
 
 def set_(source: str, app_id: int, **fields: Any) -> None:

@@ -193,8 +193,12 @@ def scrape_reviews(
                         break
 
                     page_reviews = data.get("reviews") or []
+                    # ``or {}`` collapses a present-but-None
+                    # ``query_summary`` (e.g. from a hand-rolled test
+                    # response) into an empty dict so the chained
+                    # ``.get`` doesn't crash on ``None.get``.
                     total_reported = (
-                        data.get("query_summary", {}).get(
+                        (data.get("query_summary") or {}).get(
                             "total_reviews", total_reported,
                         )
                     )

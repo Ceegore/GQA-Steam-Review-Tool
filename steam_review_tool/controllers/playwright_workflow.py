@@ -29,7 +29,13 @@ class PlaywrightWorkflow:
     def __init__(self, log_cb: Callable[[str], None]) -> None:
         self.log = log_cb
         self._stop = threading.Event()
+        # Two distinct worker slots: a scrape worker and an install
+        # worker. They previously shared ``self._worker`` which meant
+        # an in-flight scrape silently swallowed a click on "Install
+        # Playwright" (and vice versa) — a confusing no-op UX bug
+        # because the user would see the spinner but no progress.
         self._worker: Optional[threading.Thread] = None
+        self._install_worker: Optional[threading.Thread] = None
 
     # ---- dep status ----------------------------------------------------
 
@@ -45,20 +51,22 @@ class PlaywrightWorkflow:
     # ---- installers ----------------------------------------------------
 
     def install_playwright(self) -> None:
-        if self._worker and self._worker.is_alive():
+        # Separate ``_install_worker`` slot so an in-flight scrape
+        # doesn't silently swallow the install click (and vice versa).
+        if self._install_worker and self._install_worker.is_alive():
             return
-        self._worker = threading.Thread(
+        self._install_worker = threading.Thread(
             target=self._install_pw_worker, daemon=True,
         )
-        self._worker.start()
+        self._install_worker.start()
 
     def install_chromium(self) -> None:
-        if self._worker and self._worker.is_alive():
+        if self._install_worker and self._install_worker.is_alive():
             return
-        self._worker = threading.Thread(
+        self._install_worker = threading.Thread(
             target=self._install_chrome_worker, daemon=True,
         )
-        self._worker.start()
+        self._install_worker.start()
 
     def _install_pw_worker(self) -> None:
         self.log("Installing playwright package via pip (1-2 min)…")
@@ -170,11 +178,25 @@ class PlaywrightWorkflow:
         self._stop.set()
 
     def wait(self, timeout: float = 5.0) -> bool:
-        worker = self._worker
-        if worker is None:
+        # Wait for BOTH the scrape worker and the install worker so a
+        # pending install subprocess doesn't outlive the main window.
+        # The shared ``_stop`` event is set by ``stop()`` and is
+        # honoured by the scrape worker; the install worker doesn't
+        # read it (the pip subprocess is its own thing), so we just
+        # give it the timeout window to finish naturally.
+        scrape = self._worker
+        install = self._install_worker
+        if scrape is None and install is None:
             return True
-        worker.join(timeout=timeout)
-        return not worker.is_alive()
+        if scrape is not None:
+            scrape.join(timeout=timeout)
+        if install is not None:
+            install.join(timeout=timeout)
+        still_alive = (
+            (scrape is not None and scrape.is_alive())
+            or (install is not None and install.is_alive())
+        )
+        return not still_alive
 
 
 __all__ = ["PlaywrightWorkflow"]

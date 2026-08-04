@@ -126,13 +126,22 @@ class SettingsDialog:
         ).pack(side="right", padx=4)
 
     def _reset_defaults(self) -> None:
-        defaults = settings_store.reset_defaults()
+        # Reset is a "preview before commit" — populate the GUI with
+        # DEFAULTS but DO NOT touch the on-disk file. The user must
+        # click Save to commit. The previous implementation called
+        # ``settings_store.reset_defaults()`` which DELETED the file
+        # immediately, so a Reset+Cancel sequence silently wiped the
+        # user's settings.json while the in-memory App.settings still
+        # held the old values — the next app launch would start with
+        # defaults but the current session kept working with stale
+        # in-memory data (a real silent data-loss bug).
+        from ..services.settings_store import DEFAULTS
         if self._dump_root_var is not None:
-            self._dump_root_var.set(defaults["dump_root"])
+            self._dump_root_var.set(DEFAULTS["dump_root"])
         if self._obsidian_var is not None:
-            self._obsidian_var.set(defaults["obsidian_vault"])
+            self._obsidian_var.set(DEFAULTS["obsidian_vault"])
         if self._apify_var is not None:
-            self._apify_var.set(defaults["apify_token"])
+            self._apify_var.set(DEFAULTS["apify_token"])
         if self._keywords_text is not None:
             self._keywords_text.delete("1.0", "end")
         if self._ai_prompt_text is not None:

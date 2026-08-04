@@ -170,8 +170,13 @@ class SteamAPI:
                 break
 
             page_reviews = data.get("reviews", []) or []
+            # ``or {}`` collapses a present-but-None ``query_summary``
+            # (e.g. from a hand-rolled test response) into an empty
+            # dict so ``.get("total_reviews", ...)`` doesn't crash.
             total_reported = (
-                data.get("query_summary", {}).get("total_reviews", total_reported)
+                (data.get("query_summary") or {}).get(
+                    "total_reviews", total_reported,
+                )
             )
 
             if min_date_ts is not None:

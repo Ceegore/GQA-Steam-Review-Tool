@@ -41,7 +41,14 @@ def reviews_to_csv(reviews: list[dict[str, Any]], dest_path: Path) -> int:
                 safe_int(author, "last_played", 0),
                 safe_int(r, "timestamp_created", 0),
                 safe_int(r, "timestamp_updated", 0),
-                str(r.get("weighted_vote_score", "") or ""),
+                # ``safe_str`` preserves a real ``0`` / ``0.0`` (a
+                # perfectly valid weighted_vote_score). The old
+                # ``str(r.get(..., "") or "")`` pattern used ``or``
+                # which treats 0 as falsy and silently rendered an
+                # empty cell for a real 0 — same R5 residue that
+                # ``markdown_helpers.render_review`` already fixed
+                # (line 179) by switching to ``safe_str``.
+                safe_str(r, "weighted_vote_score", ""),
                 int(bool(r.get("steam_purchase"))),
                 int(bool(r.get("received_for_free"))),
                 int(bool(r.get("written_during_early_access"))),
