@@ -4,7 +4,6 @@ from __future__ import annotations
 import threading
 from typing import Callable, Optional, Any
 
-from ..core.event_bus import bus
 from ..services.trends_store import TrendsStore
 from ..models.trends_snapshot import TrendsSnapshot
 
@@ -12,8 +11,16 @@ from ..models.trends_snapshot import TrendsSnapshot
 class TrendsWorkflow:
     """Owns the Trends-tab state machine."""
 
-    TRACKED_CHANGED = "trends.tracked.changed"
-    SNAPSHOT_RECORDED = "trends.snapshot.recorded"
+    # The previous version of this class published two bus
+    # events: ``TRACKED_CHANGED`` (3 publishes) and
+    # ``SNAPSHOT_RECORDED`` (1 publish). A R20-2 audit
+    # found zero subscribers for either event — the
+    # ``TrendsWindow`` and ``tab_trends`` re-render via
+    # direct method calls (the workflow calls back into
+    # the tab through closures passed at construction
+    # time) rather than through the bus. The bus
+    # publishes were dead code. Removed in R20-2 to
+    # eliminate the drift hazard.
 
     def __init__(
         self,
@@ -32,17 +39,14 @@ class TrendsWorkflow:
             return
         self.store.add(app_id, name)
         self.log(f"Added {name} ({app_id}) to trends.")
-        bus.publish(self.TRACKED_CHANGED)
 
     def remove(self, app_id: int) -> None:
         self.store.remove(app_id)
         self.log(f"Removed {app_id} from trends.")
-        bus.publish(self.TRACKED_CHANGED)
 
     def remove_all(self) -> None:
         for app in list(self.store.tracked_apps()):
             self.store.remove(app["app_id"])
-        bus.publish(self.TRACKED_CHANGED)
 
     def list_tracked(self) -> list[dict[str, Any]]:
         return self.store.tracked_apps()
@@ -51,7 +55,6 @@ class TrendsWorkflow:
 
     def refresh_one(self, app_id: int, snapshot: TrendsSnapshot) -> None:
         self.store.record(snapshot)
-        bus.publish(self.SNAPSHOT_RECORDED, app_id=app_id)
 
     def refresh_all_async(
         self,

@@ -1,9 +1,13 @@
 """Playwright workflow — manages dependency install, browser launch, and scrape.
 
-Communicates with the UI through the event bus so the tab can render
-logs / progress / dep status without polling. The actual scraping is
-delegated to ``services/playwright_scraper.py`` (Phase-7 real
-browser-driven scrape that bypasses Steam's JSON review cache).
+Communicates with the UI through the event bus (for ``DEP_STATUS_CHANGED``
+and ``SCRAPE_COMPLETED``) and through direct method calls for the
+per-tab state. The previous version also published
+``SCRAPE_STARTED`` / ``SCRAPE_PROGRESS`` / ``SCRAPE_FAILED`` on
+the bus — R20-3 found zero subscribers for those three and
+removed them. The actual scraping is delegated to
+``services/playwright_scraper.py`` (Phase-7 real browser-driven
+scrape that bypasses Steam's JSON review cache).
 """
 from __future__ import annotations
 
@@ -20,11 +24,23 @@ from ..services import dependency_checker, dependency_installer, playwright_scra
 class PlaywrightWorkflow:
     """Owns the Playwright-tab state machine."""
 
+    # ``DEP_STATUS_CHANGED`` is subscribed by
+    # ``tab_playwright`` (it updates the Install / Open
+    # buttons). ``SCRAPE_COMPLETED`` is subscribed via
+    # ``bus.subscribe_once`` in tab_playwright (the
+    # auto-export callback).
+    #
+    # The previous version also published
+    # ``SCRAPE_STARTED``, ``SCRAPE_PROGRESS``, and
+    # ``SCRAPE_FAILED``. A R20-3 audit found zero
+    # subscribers for any of these three events — the
+    # PW tab does NOT use the ``ActionStateMixin``
+    # (it manages its own button state via direct
+    # closures), so the worker / progress / failure
+    # events were dead. Removed in R20-3 to eliminate
+    # the drift hazard.
     DEP_STATUS_CHANGED = "pw.dep.status.changed"
-    SCRAPE_STARTED = "pw.scrape.started"
-    SCRAPE_PROGRESS = "pw.scrape.progress"
     SCRAPE_COMPLETED = "pw.scrape.completed"
-    SCRAPE_FAILED = "pw.scrape.failed"
 
     def __init__(self, log_cb: Callable[[str], None]) -> None:
         self.log = log_cb
@@ -115,7 +131,6 @@ class PlaywrightWorkflow:
             self.log("A scrape is already running; ignored.")
             return False
         self._stop.clear()
-        bus.publish(self.SCRAPE_STARTED, app_id=app_id)
         self._worker = threading.Thread(
             target=self._scrape_worker,
             kwargs=dict(
@@ -132,8 +147,11 @@ class PlaywrightWorkflow:
         max_reviews: int, resume: bool,
     ) -> None:
         def progress_cb(page: int, fetched: int, total: int) -> None:
-            bus.publish(self.SCRAPE_PROGRESS,
-                        page=page, fetched=fetched, total=total)
+            # ``SCRAPE_PROGRESS`` was removed in R20-3 (no
+            # subscribers). The progress callback is now a
+            # no-op — the scrape_logs the progress via
+            # ``self.log`` inside the scraper itself.
+            pass
 
         try:
             reviews = playwright_scraper.scrape_reviews(
@@ -150,8 +168,6 @@ class PlaywrightWorkflow:
                         app_id=app_id, reviews=reviews)
         except Exception as exc:
             self.log(f"Scrape failed: {exc}")
-            bus.publish(self.SCRAPE_FAILED,
-                        app_id=app_id, error=str(exc))
 
     # ---- export (uses the shared Markdown pipeline) --------------------
 

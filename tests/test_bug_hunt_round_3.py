@@ -458,25 +458,35 @@ class TestSettingsControllerEventConstants:
     Fix: both events are class constants; the publish calls use
     them. The test asserts the constants are present and the
     publish call uses the constant (not the literal).
+
+    R20-1 update: ``SETTINGS_APPLIED`` was a dead bus event
+    (zero subscribers). The R20-1 fix removed the constant
+    + the publish call + the now-unused ``bus`` import.
+    The tests below were updated to pin the new (cleaner)
+    contract: only ``SETTINGS_CHANGED`` exists; only that
+    one event is published.
     """
 
     def test_both_events_have_class_constants(self) -> None:
         from steam_review_tool.controllers.settings_controller import (
             SettingsController,
         )
+        # R20-1: only ``SETTINGS_CHANGED`` exists; the
+        # dead ``SETTINGS_APPLIED`` was removed.
         assert hasattr(SettingsController, "SETTINGS_CHANGED")
-        assert hasattr(SettingsController, "SETTINGS_APPLIED")
+        assert not hasattr(SettingsController, "SETTINGS_APPLIED"), (
+            "SettingsController.SETTINGS_APPLIED is a dead bus "
+            "event (zero subscribers) — removed in R20-1"
+        )
         assert isinstance(SettingsController.SETTINGS_CHANGED, str)
-        assert isinstance(SettingsController.SETTINGS_APPLIED, str)
 
     def test_event_values_preserved(self) -> None:
-        """The string values must not change — they're a public API
+        """The string value must not change — it's a public API
         consumed by any subscriber that listens on the bus."""
         from steam_review_tool.controllers.settings_controller import (
             SettingsController,
         )
         assert SettingsController.SETTINGS_CHANGED == "settings.changed"
-        assert SettingsController.SETTINGS_APPLIED == "settings.applied"
 
     def test_publish_uses_constants(self) -> None:
         """The publish call must reference the class constant, not
@@ -492,20 +502,24 @@ class TestSettingsControllerEventConstants:
             if ln.strip() and not ln.lstrip().startswith("#")
         ]
         code = "\n".join(code_lines)
-        # The publish call should use ``self.SETTINGS_APPLIED``,
+        # The publish call should use ``self.SETTINGS_CHANGED``,
         # not the bare string literal.
-        assert 'bus.publish(self.SETTINGS_APPLIED' in code
+        assert 'bus.publish(self.SETTINGS_CHANGED' in code
         # And the old bare literal must be gone from code lines.
-        # (The literal still appears in the docstring via
-        # ``SETTINGS_APPLIED = "settings.applied"`` which is fine.)
-        bad_call = 'bus.publish("settings.applied"'
+        bad_call = 'bus.publish("settings.changed"'
         assert bad_call not in code, (
             f"Found bare string literal in publish call: {bad_call}"
         )
+        # R20-1: the dead ``SETTINGS_APPLIED`` publish must
+        # NOT appear either.
+        assert 'bus.publish(self.SETTINGS_APPLIED' not in code
+        assert 'bus.publish("settings.applied"' not in code
 
     def test_saved_event_is_published(self) -> None:
-        """Behavioural check: ``_on_saved`` publishes both events
-        on the bus with the saved data."""
+        """Behavioural check: ``_on_saved`` publishes the
+        ``SETTINGS_CHANGED`` event on the bus with the saved
+        data. The R20-1 fix removed the dead
+        ``SETTINGS_APPLIED`` publish."""
         from steam_review_tool.controllers.settings_controller import (
             SettingsController,
         )
@@ -528,8 +542,12 @@ class TestSettingsControllerEventConstants:
             event_bus.bus.publish = original_publish  # type: ignore[assignment]
 
         events = [e for e, _ in captured]
+        # R20-1: only ``SETTINGS_CHANGED`` is published now.
         assert "settings.changed" in events
-        assert "settings.applied" in events
+        assert "settings.applied" not in events, (
+            "SETTINGS_APPLIED is a dead bus event — "
+            "the publish should have been removed in R20-1"
+        )
         for _event, kw in captured:
             assert kw.get("data") == {"dump_root": "/tmp/x"}
 
