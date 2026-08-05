@@ -8,12 +8,16 @@ ask it to do something without knowing who else is listening.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable, Optional
 
 from ..core.event_bus import bus
 from ..exporters.obsidian_copier import copy_to_obsidian_vault
 from ..utils.os_open import open_path_in_os
+
+
+_log = get_logger = logging.getLogger(__name__)
 
 
 class DumpFolderController:
@@ -34,6 +38,35 @@ class DumpFolderController:
     def set_dump_root(self, path: Path) -> None:
         self.dump_root = path
         bus.publish("dump.root.changed", path=str(path))
+        # Persist the new dump root to ``settings.json`` so
+        # the choice survives an app restart. The previous
+        # version only updated the in-memory ``self.dump_root``,
+        # so a user who picked a new dump folder via the
+        # "Set…" button (without opening the Settings dialog)
+        # would find their choice reverted on next launch.
+        # The Settings dialog is the only OTHER path that
+        # touches ``settings.json.dump_root``; both paths
+        # now converge to the same on-disk value.
+        try:
+            from ..services.settings_store import (
+                load as _load_settings,
+                save as _save_settings,
+            )
+            current = _load_settings()
+        except OSError as exc:
+            _log.warning(
+                "could not load settings for dump_root persist: %s",
+                exc,
+            )
+            return
+        current["dump_root"] = str(path)
+        try:
+            _save_settings(current)
+        except OSError as exc:
+            _log.warning(
+                "could not persist dump_root to settings: %s",
+                exc,
+            )
 
     def open_dump_folder(self) -> Optional[str]:
         return self._open(self.dump_root)
