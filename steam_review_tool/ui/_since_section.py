@@ -110,8 +110,8 @@ def build_since_section(
                 # so the developer can spot the failure in
                 # stderr even when no log_fn is wired.
                 logging.getLogger(__name__).exception(
-                    "since-section on_change callback failed: %s: %s",
-                    type(exc).__name__, exc,
+                    "since-section on_change callback failed: %s",
+                    exc,
                 )
                 if log_fn is not None:
                     log_fn(f"since-section callback failed: {exc}")

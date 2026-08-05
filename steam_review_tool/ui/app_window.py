@@ -298,8 +298,8 @@ class App(ctk.CTk):
             # so the developer can spot the failure in stderr.
             import logging
             logging.getLogger(__name__).exception(
-                "could not persist settings: %s: %s",
-                type(exc).__name__, exc,
+                "could not persist settings: %s",
+                exc,
             )
 
     def _on_open_settings(self) -> None:
