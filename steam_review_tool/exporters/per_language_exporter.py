@@ -88,9 +88,9 @@ def write_per_language(
             # Continue with the remaining languages so a
             # single bad file doesn't drop the whole
             # per-language batch.
-            _log.warning(
-                "per-language file write failed for %s: %s: %s",
-                per_path, type(exc).__name__, exc,
+            _log.exception(
+                "per-language file write failed for %s: %s",
+                per_path, exc,
             )
     return n
 

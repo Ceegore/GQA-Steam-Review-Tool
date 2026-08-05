@@ -321,11 +321,24 @@ class TestWritePerLanguageLogsOSError:
             "per-language export"
         )
         # And it must log via the standard logger.
-        assert "_log.warning" in body, (
-            "write_per_language must log via the standard "
-            "_log.warning(...) so a failed per-language "
-            "file write is visible in stderr (R12-4 to "
-            "R12-7 + R17-3 lesson)"
+        # R22 normalizes the R18-3 fix-shape from
+        # ``_log.warning`` to ``_log.exception`` (R21
+        # lesson — ``_log.warning`` silently drops
+        # the traceback; ``_log.exception`` captures
+        # it via ``sys.exc_info()``). The single
+        # ``%s, exc`` arg shape is preserved.
+        assert (
+            '_log.exception(\n                "per-language '
+            'file write failed for %s: %s",\n'
+            '                per_path, exc,\n'
+            '            )'
+        ) in body, (
+            "write_per_language must log via "
+            "_log.exception(...) with the single-%s "
+            "format so a failed per-language file "
+            "write is visible in stderr AND the "
+            "traceback is captured (R12-4 to R12-7 + "
+            "R17-3 + R21 + R22 lessons)."
         )
 
     def test_write_per_language_logs_on_oserror(self) -> None:

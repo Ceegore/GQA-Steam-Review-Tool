@@ -69,7 +69,7 @@ def reset_defaults() -> dict[str, Any]:
     except FileNotFoundError:
         pass
     except OSError as exc:
-        _log.warning("could not remove settings.json: %s", exc)
+        _log.exception("could not remove settings.json: %s", exc)
     return dict(DEFAULTS)
 
 

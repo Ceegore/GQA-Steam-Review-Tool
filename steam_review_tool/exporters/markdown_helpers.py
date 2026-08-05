@@ -45,9 +45,9 @@ def render_digest(reviews: list[dict[str, Any]], app: dict[str, Any], kw: Option
         digest = build_pre_ai_digest(reviews, app_details=app, keyword_list=kw, top_n=5)
         return digest.splitlines() + [""]
     except Exception as exc:
-        _log.warning(
-            "pre-AI digest skipped (reviews=%d): %s: %s",
-            len(reviews), type(exc).__name__, exc,
+        _log.exception(
+            "pre-AI digest skipped (reviews=%d): %s",
+            len(reviews), exc,
         )
         return []
 
@@ -167,10 +167,9 @@ def highlight_keywords(text: str, keyword_list: Optional[list[Any]]) -> str:
         pat = "|".join(parts)
         return re.sub(rf"(?i)\b({pat})\b", r"**\1**", text)
     except Exception as exc:
-        _log.warning(
-            "keyword highlight skipped (text len=%d, kws=%d): "
-            "%s: %s",
-            len(text), len(cleaned_kw), type(exc).__name__, exc,
+        _log.exception(
+            "keyword highlight skipped (text len=%d, kws=%d): %s",
+            len(text), len(cleaned_kw), exc,
         )
         return text
 
@@ -248,9 +247,9 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
         # unexpected input) could still surface here. Log a
         # warning so the user can spot a partial export; the
         # rest of the review row is still produced below.
-        _log.warning(
-            "classify_review_type failed for review #%d: %s: %s",
-            idx, type(exc).__name__, exc,
+        _log.exception(
+            "classify_review_type failed for review #%d: %s",
+            idx, exc,
         )
 
     try:
@@ -265,9 +264,9 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
             tag_line = " ".join(f"`{md_escape(t)}`" for t in tags)
             lines.append(f"| **Tags** | {tag_line} |")
     except Exception as exc:
-        _log.warning(
-            "extract_tags failed for review #%d: %s: %s",
-            idx, type(exc).__name__, exc,
+        _log.exception(
+            "extract_tags failed for review #%d: %s",
+            idx, exc,
         )
     lines.append("")
 
@@ -333,19 +332,18 @@ def render_footer(reviews: list[dict[str, Any]]) -> list[str]:
         # dropped the Top-5-reviewers table for the whole
         # export on the first malformed review row. Log a
         # warning so a partial export is at least visible.
-        _log.warning(
-            "Top-5-reviewers footer skipped (reviews=%d): "
-            "%s: %s",
-            len(reviews), type(exc).__name__, exc,
+        _log.exception(
+            "Top-5-reviewers footer skipped (reviews=%d): %s",
+            len(reviews), exc,
         )
     try:
         stats = quick_stats_footer(reviews)
         if stats:
             lines += ["---", "", stats, ""]
     except Exception as exc:
-        _log.warning(
-            "quick_stats_footer skipped (reviews=%d): %s: %s",
-            len(reviews), type(exc).__name__, exc,
+        _log.exception(
+            "quick_stats_footer skipped (reviews=%d): %s",
+            len(reviews), exc,
         )
     return lines
 

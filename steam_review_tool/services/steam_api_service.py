@@ -85,7 +85,7 @@ class SteamAPI:
             r.raise_for_status()
             data = r.json()
         except (requests.RequestException, ValueError) as exc:
-            _log.warning("get_app_details failed: %s", exc)
+            _log.exception("get_app_details failed: %s", exc)
             return None
 
         node = data.get(str(app_id))
@@ -217,9 +217,9 @@ class SteamAPI:
                 try:
                     cursor_cb(cursor)
                 except OSError as exc:
-                    _log.warning(
-                        "resume-cursor save failed: %s: %s",
-                        type(exc).__name__, exc,
+                    _log.exception(
+                        "resume-cursor save failed: %s",
+                        exc,
                     )
             time.sleep(STEAM_API_PAGE_DELAY_SEC)
 
@@ -260,7 +260,7 @@ class SteamAPI:
                 r.raise_for_status()
                 data = r.json()
             except (requests.RequestException, ValueError) as exc:
-                _log.warning("poll_recent_reviews error: %s", exc)
+                _log.exception("poll_recent_reviews error: %s", exc)
                 break
 
             if not data.get("success"):

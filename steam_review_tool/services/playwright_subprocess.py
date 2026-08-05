@@ -104,7 +104,7 @@ def run_popularity_probe(app_id: int, timeout: int = 90) -> dict[str, Any]:
     try:
         helper_path.write_text(helper_text, encoding="utf-8")
     except OSError as exc:
-        _log.warning("could not write helper script: %s", exc)
+        _log.exception("could not write helper script: %s", exc)
         return {"wishlist": None, "followers": None, "reviews": None}
 
     # ASCII-safe JSON dump — see note in helper module above.
@@ -122,13 +122,13 @@ def run_popularity_probe(app_id: int, timeout: int = 90) -> dict[str, Any]:
         try:
             return json.loads(result.stdout or "{}")
         except (json.JSONDecodeError, ValueError) as exc:
-            _log.warning("helper returned invalid JSON: %s", exc)
+            _log.exception("helper returned invalid JSON: %s", exc)
             return {"wishlist": None, "followers": None, "reviews": None}
     except subprocess.TimeoutExpired:
         _log.warning("Playwright probe timed out after %ds", timeout)
         return {"wishlist": None, "followers": None, "reviews": None}
     except (FileNotFoundError, OSError) as exc:
-        _log.warning("Playwright probe failed: %s", exc)
+        _log.exception("Playwright probe failed: %s", exc)
         return {"wishlist": None, "followers": None, "reviews": None}
     finally:
         try:
