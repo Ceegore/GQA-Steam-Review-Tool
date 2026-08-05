@@ -379,7 +379,24 @@ class TestSectionHeaderTypeHints:
         CORRECTED return type
         ``tuple[ctk.CTkFrame, ctk.CTkEntry]``
         (NOT the wrong
-        ``tuple[ctk.CTkLabel, ctk.CTkEntry]``)."""
+        ``tuple[ctk.CTkLabel, ctk.CTkEntry]``).
+
+        Note: R31 removed the dead ``labelled_entry``
+        function (it had no callers anywhere in
+        production code or tests — the R27 dead-
+        code audit caught it). If R31 is reverted,
+        this test will re-assert the corrected
+        type hint. We use a soft-skip pattern:
+        if the function is gone, the test is a
+        no-op (R31's removal is the FINAL fix).
+        """
+        from steam_review_tool.ui import section_header
+        if not hasattr(section_header, "labelled_entry"):
+            # R31 removed the dead function. The
+            # final fix is the removal itself, not
+            # the type hint. This test was the
+            # INTERIM fix (R30-5).
+            return
         src = self._src()
         idx = src.find("def labelled_entry")
         assert idx >= 0, (
@@ -465,12 +482,10 @@ class TestNoTypeHintGapInPublicFunctions:
     """
 
     # Functions DELIBERATELY excluded from the
-    # audit (R30 notes).
-    _EXEMPT: set[tuple[str, str]] = {
-        # Dead code from R27 audit; R30 corrected
-        # its return type as a side-effect.
-        ("section_header.py", "labelled_entry"),
-    }
+    # audit (R30 notes). R31 removed the dead
+    # ``labelled_entry`` from section_header.py
+    # — the exemption is no longer needed.
+    _EXEMPT: set[tuple[str, str]] = set()
 
     def _walk_public_functions(
         self, root: Path,

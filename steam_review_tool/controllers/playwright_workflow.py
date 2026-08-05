@@ -84,6 +84,15 @@ class PlaywrightWorkflow:
     # ---- installers ----------------------------------------------------
 
     def install_playwright(self) -> None:
+        """Spawn a background thread that runs
+        ``pip install playwright`` (1-2 min) + bootstraps pip
+        if missing in the target Python.
+
+        Idempotent: if an install is already in progress, the
+        call is a no-op (so a double-click on the install button
+        doesn't start two pip subprocesses). Progress is reported
+        via the ``DEP_STATUS_CHANGED`` bus event.
+        """
         # Separate ``_install_worker`` slot so an in-flight scrape
         # doesn't silently swallow the install click (and vice versa).
         if self._install_worker and self._install_worker.is_alive():
@@ -94,6 +103,14 @@ class PlaywrightWorkflow:
         self._install_worker.start()
 
     def install_chromium(self) -> None:
+        """Spawn a background thread that downloads the Playwright
+        Chromium binary (~150 MB, 1-3 min).
+
+        Same idempotency / bus-event pattern as
+        :meth:`install_playwright`. Does NOT auto-install the
+        ``playwright`` Python package — call :meth:`install_playwright`
+        first if both are missing.
+        """
         if self._install_worker and self._install_worker.is_alive():
             return
         self._install_worker = threading.Thread(
@@ -122,6 +139,13 @@ class PlaywrightWorkflow:
     # ---- cache ---------------------------------------------------------
 
     def open_cache(self) -> Optional[str]:
+        """Open the Playwright browser-cache directory in the OS
+        file manager (Explorer / Finder / xdg-open).
+
+        Returns ``None`` on success, an error string on failure
+        (e.g. the directory doesn't exist yet because Chromium
+        has never been installed).
+        """
         return dependency_installer.open_pw_cache()
 
     # ---- scrape (Phase 7) ----------------------------------------------
@@ -215,6 +239,14 @@ class PlaywrightWorkflow:
         per_language: bool = False,
         obsidian_vault: Optional[Path] = None,
     ) -> dict[str, Any]:
+        """Render the scraped reviews to ``dest`` (markdown +
+        optional CSV / JSON / per-language splits + optional
+        Obsidian copy). Same shared pipeline as
+        :meth:`APIWorkflow.export` — the Playwright tab and the
+        API tab produce identical output formats.
+
+        Returns the export summary dict from ``run_export``.
+        """
         return run_export(
             ctx, dest,
             also_csv=also_csv, also_json=also_json,
@@ -225,6 +257,15 @@ class PlaywrightWorkflow:
     # ---- control --------------------------------------------------------
 
     def stop(self) -> None:
+        """Signal the current scrape worker to stop.
+
+        Cooperative: the worker checks ``self._stop`` between
+        pages and exits cleanly. Does NOT block — call
+        :meth:`wait` separately to wait for the worker to
+        finish (e.g. on app shutdown so we don't kill the
+        worker mid-write). Also waits for any in-flight
+        install subprocess via :meth:`wait`.
+        """
         self._stop.set()
 
     def wait(self, timeout: float = 5.0) -> bool:

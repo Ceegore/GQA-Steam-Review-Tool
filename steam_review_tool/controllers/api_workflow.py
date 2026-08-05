@@ -104,6 +104,14 @@ class APIWorkflow:
             return True
 
     def stop(self) -> None:
+        """Signal the current fetch worker to stop.
+
+        Cooperative: the worker checks ``self._stop`` between
+        pages and exits cleanly. Does NOT block — call
+        :meth:`wait` separately to wait for the worker to
+        finish (e.g. on app shutdown so we don't kill the
+        worker mid-write).
+        """
         self._stop.set()
 
     def wait(self, timeout: float = 5.0) -> bool:
@@ -174,6 +182,19 @@ class APIWorkflow:
         per_language: bool = False,
         obsidian_vault: Optional[Path] = None,
     ) -> dict[str, Any]:
+        """Render the current reviews to ``dest`` (markdown + optional
+        CSV / JSON / per-language splits + optional Obsidian copy).
+
+        Delegates to :func:`exporters.export_orchestrator.run_export`
+        which is the shared export pipeline (also used by the
+        Playwright tab). The ``obsidian_vault`` parameter triggers
+        the post-export copy into the user's Obsidian vault (if set
+        in settings).
+
+        Returns the export summary dict from ``run_export`` (file
+        paths + counts). Errors are caught and reported via the log
+        callback; partial outputs are preserved.
+        """
         return run_export(
             ctx, dest,
             also_csv=also_csv, also_json=also_json,
