@@ -5,11 +5,13 @@ shim before navigating and pre-dismiss common age / cookie gates.
 """
 from __future__ import annotations
 
+from typing import Any, Callable, Optional
+
 from ..core.constants import ANTI_DETECT_JS, GATE_BUTTON_TEXTS
 from ._playwright_safe import _PlaywrightError
 
 
-def inject_anti_detect(page) -> None:
+def inject_anti_detect(page: Any) -> None:
     """Inject the ANTI_DETECT shim into the given Playwright ``page``."""
     try:
         page.add_init_script(ANTI_DETECT_JS)
@@ -18,7 +20,10 @@ def inject_anti_detect(page) -> None:
         pass
 
 
-def try_dismiss_gates(page, log=None) -> None:
+def try_dismiss_gates(
+    page: Any,
+    log: Optional[Callable[[str], None]] = None,
+) -> None:
     """Click through age / content / cookie gates that may block us.
 
     Each candidate button is tried with a short visibility timeout;

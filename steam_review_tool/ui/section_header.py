@@ -7,7 +7,7 @@ import customtkinter as ctk
 
 
 def make_section(
-    parent,
+    parent: ctk.CTkBaseClass,
     title: str,
     right_widget: Optional[ctk.CTkBaseClass] = None,
 ) -> ctk.CTkFrame:
@@ -28,13 +28,19 @@ def make_section(
 
 
 def labelled_entry(
-    parent,
+    parent: ctk.CTkBaseClass,
     label_text: str,
     placeholder: str = "",
     width: int = 200,
     on_submit: Optional[Callable[[], None]] = None,
-) -> tuple[ctk.CTkLabel, ctk.CTkEntry]:
-    """Create a labelled single-line entry."""
+) -> tuple[ctk.CTkFrame, ctk.CTkEntry]:
+    """Create a labelled single-line entry.
+
+    Returns ``(row_frame, entry)`` — the row frame contains
+    the label + entry packed side-by-side, the entry is
+    returned separately so the caller can wire up
+    ``on_change`` traces without re-querying Tk.
+    """
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=4, pady=2)
     ctk.CTkLabel(row, text=label_text, width=140, anchor="w").pack(

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from ..core.timezone import current_berlin
 
@@ -43,7 +43,7 @@ def make_export_basename(
     return f"GQA Reviewdump_{game_short}_{filt}_{ts}.md"
 
 
-def short_filter_label(tab: str, app) -> str:
+def short_filter_label(tab: str, app: Any) -> str:
     """Human-readable filter mode label for the export filename.
 
     Reads the appropriate GUI widgets via ``app`` and returns something

@@ -6,6 +6,7 @@ the tabs can stay focused on building widgets.
 from __future__ import annotations
 
 import os
+import tkinter as tk
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -39,7 +40,7 @@ def open_in_editor(path: Path) -> Optional[str]:
     return open_path_in_os(path)
 
 
-def copy_to_clipboard(root, text: str) -> None:
+def copy_to_clipboard(root: tk.Misc, text: str) -> None:
     """Copy ``text`` to the system clipboard via Tk.
 
     Must be called on the Tk main thread; calling it from a worker

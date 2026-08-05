@@ -10,6 +10,7 @@ import re
 from typing import Optional, Any
 
 from ..core.logger import get_logger
+from ..models.export_context import ExportContext
 from ..services.pre_ai_digest import (
     build_pre_ai_digest, quick_stats_footer,
 )
@@ -76,7 +77,7 @@ def render_game_info(app_id: int, app: dict[str, Any]) -> list[str]:
     ]
 
 
-def render_filters(ctx) -> list[str]:
+def render_filters(ctx: ExportContext) -> list[str]:
     return [
         "## Applied Filters",
         "",

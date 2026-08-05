@@ -52,17 +52,17 @@ except Exception:  # pragma: no cover - tzdata missing
     class _BerlinTZ(tzinfo):
         """CET (UTC+1) / CEST (UTC+2) — manual DST switch."""
 
-        def utcoffset(self, dt):
+        def utcoffset(self, dt: Optional[datetime]) -> timedelta:
             if _is_cest(dt.year, dt.month, dt.day):
                 return timedelta(hours=2)
             return timedelta(hours=1)
 
-        def dst(self, dt):
+        def dst(self, dt: Optional[datetime]) -> timedelta:
             if _is_cest(dt.year, dt.month, dt.day):
                 return timedelta(hours=1)
             return timedelta(0)
 
-        def tzname(self, dt):
+        def tzname(self, dt: Optional[datetime]) -> str:
             return "CEST" if _is_cest(dt.year, dt.month, dt.day) else "CET"
 
     BERLIN = _BerlinTZ()
