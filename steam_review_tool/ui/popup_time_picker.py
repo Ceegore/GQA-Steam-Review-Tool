@@ -118,8 +118,17 @@ class TimePickerPopup:
         if self.on_change is not None:
             try:
                 self.on_change("")
-            except Exception:
-                pass
+            except Exception as exc:
+                # R24: the previous ``except Exception: pass`` silently
+                # dropped any failure from the user-supplied callback.
+                # Always log so the failure is at least visible in
+                # stderr (mirrors the R23 fix-shape in
+                # ``_since_section._on_preset_change``).
+                import logging
+                logging.getLogger(__name__).exception(
+                    "time-picker on_change callback (clear) failed: %s",
+                    exc,
+                )
         if self._top is not None:
             self._top.destroy()
 
@@ -135,8 +144,17 @@ class TimePickerPopup:
         if self.on_change is not None:
             try:
                 self.on_change(value)
-            except Exception:
-                pass
+            except Exception as exc:
+                # R24: the previous ``except Exception: pass`` silently
+                # dropped any failure from the user-supplied callback.
+                # Always log so the failure is at least visible in
+                # stderr (mirrors the R23 fix-shape in
+                # ``_since_section._on_preset_change``).
+                import logging
+                logging.getLogger(__name__).exception(
+                    "time-picker on_change callback (apply) failed: %s",
+                    exc,
+                )
         if self._top is not None:
             self._top.destroy()
 

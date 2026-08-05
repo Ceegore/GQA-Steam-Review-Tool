@@ -169,8 +169,21 @@ class ResponsiveGrid:
             if self._reflow_cb is not None:
                 try:
                     self._reflow_cb()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # R24: the previous ``except Exception: pass``
+                    # silently dropped any failure from the
+                    # caller-supplied reflow callback. The callback
+                    # is typically a tab controller's
+                    # ``_refresh_button_states`` or label-update
+                    # hook — bugs in those handlers would be
+                    # invisible. Always log so the failure is at
+                    # least visible in stderr (mirrors the R23
+                    # fix-shape in ``_since_section._on_preset_change``).
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        "ResponsiveGrid on_reflow callback failed: %s",
+                        exc,
+                    )
         finally:
             self._reflowing = False
 

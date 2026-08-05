@@ -210,8 +210,20 @@ class WelcomeDialog:
             self._settings["greeting_shown"] = True
             try:
                 self._on_save_settings(self._settings)
-            except Exception:
-                pass
+            except Exception as exc:
+                # R24: the previous ``except Exception: pass`` silently
+                # dropped any failure from the persistence callback.
+                # ``_persist_settings`` (R23-1) already logs internally,
+                # but a callback from another caller, or an exception
+                # raised BEFORE the persistence call ran, would never
+                # be visible — the greeting would silently fail to
+                # be remembered and reappear on next launch. Always
+                # log so the developer can spot the failure in stderr.
+                import logging
+                logging.getLogger(__name__).exception(
+                    "welcome-dialog on_save_settings callback failed: %s",
+                    exc,
+                )
         try:
             if self._top is not None and self._top.winfo_exists():
                 self._top.grab_release()
