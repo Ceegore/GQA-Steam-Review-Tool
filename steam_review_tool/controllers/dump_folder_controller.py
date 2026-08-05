@@ -66,20 +66,25 @@ class DumpFolderController:
                 save as _save_settings,
             )
             current = _load_settings()
-        except OSError as exc:
-            _log.warning(
-                "could not load settings for dump_root persist: %s",
-                exc,
-            )
+        except OSError:
+            # ``_log.exception`` (not ``_log.warning``) so the
+            # traceback is captured — a "could not load
+            # settings" failure with only the exception
+            # message hides the file path / permissions
+            # error that the developer needs to debug.
+            # Same R12-4 to R12-7 + R15-3 lesson applied
+            # to the new dump_root chokepoint in R16-3.
+            _log.exception("could not load settings for dump_root persist")
             return
         current["dump_root"] = str(path)
         try:
             _save_settings(current)
-        except OSError as exc:
-            _log.warning(
-                "could not persist dump_root to settings: %s",
-                exc,
-            )
+        except OSError:
+            # Same R12-4 + R15-3 traceback-capture lesson:
+            # a save failure with only the exception
+            # message hides WHICH path failed and WHY.
+            # ``_log.exception`` captures the traceback.
+            _log.exception("could not persist dump_root to settings")
 
     def set_obsidian_vault(self, vault: Optional[Path]) -> None:
         """Update the in-memory vault + persist the change.
@@ -104,20 +109,24 @@ class DumpFolderController:
                 save as _save_settings,
             )
             current = _load_settings()
-        except OSError as exc:
-            _log.warning(
-                "could not load settings for obsidian_vault persist: %s",
-                exc,
-            )
+        except OSError:
+            # Same R12-4 + R15-3 traceback-capture lesson
+            # as ``set_dump_root`` above. ``_log.exception``
+            # captures the traceback so a developer can
+            # see WHICH settings file failed to load
+            # (file path, permissions, etc.) — not just
+            # the bare exception message.
+            _log.exception("could not load settings for obsidian_vault persist")
             return
         current["obsidian_vault"] = str(vault) if vault else ""
         try:
             _save_settings(current)
-        except OSError as exc:
-            _log.warning(
-                "could not persist obsidian_vault to settings: %s",
-                exc,
-            )
+        except OSError:
+            # Same R12-4 + R15-3 traceback-capture lesson:
+            # ``_log.exception`` captures the traceback
+            # so a save failure surfaces the file path
+            # + permissions error in the log.
+            _log.exception("could not persist obsidian_vault to settings")
 
     def open_dump_folder(self) -> Optional[str]:
         return self._open(self.dump_root)

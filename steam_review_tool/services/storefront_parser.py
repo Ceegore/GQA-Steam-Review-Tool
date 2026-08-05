@@ -42,16 +42,30 @@ class StorefrontParser:
             # silently dropped network errors — the trends tab
             # stored ``None`` for all three metrics and the user
             # had no way to tell whether Steam returned empty data
-            # or the request itself failed. Log the cause so the
-            # ``[time] WARNING ...`` line shows up in stderr /
-            # the dumped log.
-            _log.warning(
+            # or the request itself failed. Use ``_log.exception``
+            # (not ``_log.warning``) so the traceback is captured
+            # — a network error with only the bare exception
+            # message hides the URL / params / response status
+            # the developer needs to debug. The ``exc`` arg is
+            # still included in the log line (per the R13 fix
+            # contract) so the underlying cause ("DNS lookup
+            # failed", "503 Service Unavailable", ...) is
+            # visible in the user's stderr log without having
+            # to scroll through the traceback. Same R12-4 to
+            # R12-7 + R15-3 lesson.
+            _log.exception(
                 "get_popularity_metrics(%d, %s) failed: %s",
                 app_id, language, exc,
             )
             return out
         except (ValueError, UnicodeDecodeError) as exc:
-            _log.warning(
+            # Same R12-4 + R15-3 traceback-capture lesson:
+            # ``_log.exception`` captures the traceback for
+            # a bad-response failure (HTML gibberish, encoding
+            # issues, etc.). The ``exc`` arg keeps the R13
+            # contract: the underlying cause is visible in
+            # the log line.
+            _log.exception(
                 "get_popularity_metrics(%d, %s): bad response: %s",
                 app_id, language, exc,
             )
@@ -117,7 +131,15 @@ class StorefrontParser:
             r.raise_for_status()
             html = r.text
         except (requests.RequestException, ValueError) as exc:
-            _log.warning("stats fetch failed: %s", exc)
+            # Same R12-4 + R15-3 traceback-capture lesson:
+            # ``_log.exception`` captures the traceback so
+            # a developer can see WHICH URL / response failed
+            # (Steam's anti-bot heuristics regularly produce
+            # surprising HTML, so the traceback matters).
+            # The ``exc`` arg keeps the log line useful
+            # (the underlying HTTP error is visible
+            # without scrolling through the traceback).
+            _log.exception("stats fetch failed: %s", exc)
             return out
 
         m = re.search(

@@ -1,13 +1,10 @@
 """Playwright workflow — manages dependency install, browser launch, and scrape.
 
-Communicates with the UI through the event bus (for ``DEP_STATUS_CHANGED``
-and ``SCRAPE_COMPLETED``) and through direct method calls for the
-per-tab state. The previous version also published
-``SCRAPE_STARTED`` / ``SCRAPE_PROGRESS`` / ``SCRAPE_FAILED`` on
-the bus — R20-3 found zero subscribers for those three and
-removed them. The actual scraping is delegated to
-``services/playwright_scraper.py`` (Phase-7 real browser-driven
-scrape that bypasses Steam's JSON review cache).
+Communicates with the UI through the event bus (for ``DEP_STATUS_CHANGED``,
+``SCRAPE_STARTED``, ``SCRAPE_COMPLETED``, ``SCRAPE_FAILED``) and through
+direct method calls for the per-tab state. The actual scraping is
+delegated to ``services/playwright_scraper.py`` (Phase-7 real
+browser-driven scrape that bypasses Steam's JSON review cache).
 """
 from __future__ import annotations
 
@@ -24,23 +21,43 @@ from ..services import dependency_checker, dependency_installer, playwright_scra
 class PlaywrightWorkflow:
     """Owns the Playwright-tab state machine."""
 
-    # ``DEP_STATUS_CHANGED`` is subscribed by
-    # ``tab_playwright`` (it updates the Install / Open
-    # buttons). ``SCRAPE_COMPLETED`` is subscribed via
-    # ``bus.subscribe_once`` in tab_playwright (the
-    # auto-export callback).
+    # Bus events:
+    # - ``DEP_STATUS_CHANGED`` is subscribed by
+    #   ``tab_playwright`` (it updates the Install / Open
+    #   buttons).
+    # - ``SCRAPE_STARTED`` / ``SCRAPE_COMPLETED`` /
+    #   ``SCRAPE_FAILED`` are subscribed via
+    #   ``install_action_state_bus`` in ``tab_playwright``
+    #   (the ``ActionStateMixin`` — same mixin the API tab
+    #   uses for ``FETCH_*`` events). These drive the
+    #   enable / disable state of the scrape / stop /
+    #   install buttons.
     #
-    # The previous version also published
-    # ``SCRAPE_STARTED``, ``SCRAPE_PROGRESS``, and
-    # ``SCRAPE_FAILED``. A R20-3 audit found zero
-    # subscribers for any of these three events — the
-    # PW tab does NOT use the ``ActionStateMixin``
-    # (it manages its own button state via direct
-    # closures), so the worker / progress / failure
-    # events were dead. Removed in R20-3 to eliminate
-    # the drift hazard.
+    # R20-3 originally removed ``SCRAPE_STARTED`` and
+    # ``SCRAPE_FAILED`` as "dead" (the R20 audit walked
+    # direct ``bus.subscribe(event, ...)`` calls and
+    # missed the INDIRECT subscription via the mixin's
+    # ``started_event=`` / ``failed_event=`` kwargs).
+    # The R20-3 fix broke the smoke test
+    # (``AttributeError: 'PlaywrightWorkflow' object has
+    # no attribute 'SCRAPE_STARTED'`` at
+    # ``tab_playwright`` construction time) because the
+    # PW tab's ``install_action_state_bus(...)`` call
+    # passes ``self.pw_wf.SCRAPE_STARTED`` /
+    # ``self.pw_wf.SCRAPE_FAILED`` as the event names
+    # to subscribe to. R21-0 restores both constants
+    # + both publishes; the events are LIVE with the
+    # ``ActionStateMixin`` as the (sole) subscriber.
+    #
+    # ``SCRAPE_PROGRESS`` was also removed in R20-3 and
+    # stays removed — no caller subscribes to it. The
+    # scraper's progress logs are surfaced via
+    # ``self.log`` inside the scraper itself, not via
+    # the bus.
     DEP_STATUS_CHANGED = "pw.dep.status.changed"
+    SCRAPE_STARTED = "pw.scrape.started"
     SCRAPE_COMPLETED = "pw.scrape.completed"
+    SCRAPE_FAILED = "pw.scrape.failed"
 
     def __init__(self, log_cb: Callable[[str], None]) -> None:
         self.log = log_cb
@@ -147,12 +164,22 @@ class PlaywrightWorkflow:
         max_reviews: int, resume: bool,
     ) -> None:
         def progress_cb(page: int, fetched: int, total: int) -> None:
-            # ``SCRAPE_PROGRESS`` was removed in R20-3 (no
-            # subscribers). The progress callback is now a
-            # no-op — the scrape_logs the progress via
+            # ``SCRAPE_PROGRESS`` was removed in R20-3 and
+            # stays removed in R21-0 (no caller subscribes
+            # to it). The progress callback is now a
+            # no-op — the scraper logs the progress via
             # ``self.log`` inside the scraper itself.
             pass
 
+        # Notify the UI that a scrape has begun — the
+        # ``ActionStateMixin`` in ``tab_playwright``
+        # subscribes via ``install_action_state_bus``
+        # and disables the scrape / install / resume
+        # buttons in response. R20-3 incorrectly
+        # classified this event as dead (the audit
+        # missed the INDIRECT subscriber via the mixin);
+        # R21-0 restored the publish.
+        bus.publish(self.SCRAPE_STARTED, app_id=app_id)
         try:
             reviews = playwright_scraper.scrape_reviews(
                 app_id,
@@ -167,6 +194,13 @@ class PlaywrightWorkflow:
             bus.publish(self.SCRAPE_COMPLETED,
                         app_id=app_id, reviews=reviews)
         except Exception as exc:
+            # Mirror ``SCRAPE_STARTED``: notify the UI
+            # that a scrape failed so the mixin can
+            # re-enable the buttons (without forcing
+            # the Export button on — same semantics as
+            # ``FETCH_FAILED`` in the API tab).
+            bus.publish(self.SCRAPE_FAILED,
+                        app_id=app_id, error=str(exc))
             self.log(f"Scrape failed: {exc}")
 
     # ---- export (uses the shared Markdown pipeline) --------------------

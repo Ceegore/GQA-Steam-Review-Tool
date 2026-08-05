@@ -279,21 +279,35 @@ class TestNoTrackedChangedOrSnapshotRecordedDeadEvents:
 
 
 # ---------------------------------------------------------------------------
-# BUG-R20-3: SCRAPE_STARTED + SCRAPE_PROGRESS + SCRAPE_FAILED are dead
+# BUG-R20-3: SCRAPE_PROGRESS is dead (R20-3 false positive on
+# SCRAPE_STARTED + SCRAPE_FAILED — see R21-0 below)
 # ---------------------------------------------------------------------------
-class TestNoScrapeStartedProgressFailedDeadEvents:
-    """``PlaywrightWorkflow`` published
-    ``SCRAPE_STARTED`` (1 publish),
+class TestNoScrapeProgressDeadEvent:
+    """``PlaywrightWorkflow._scrape_worker`` published
     ``SCRAPE_PROGRESS`` (1 publish, via the
-    ``progress_cb`` closure), and ``SCRAPE_FAILED``
-    (1 publish) — all dead bus events with zero
-    subscribers. R20-3 fix removed the 3 constants
-    + the 3 publishes; the now-redundant
-    ``progress_cb`` was converted to a no-op (it
-    was the only caller of SCRAPE_PROGRESS).
+    ``progress_cb`` closure) — a dead bus event with
+    zero subscribers. R20-3 correctly removed the
+    constant + the publish + converted the
+    ``progress_cb`` to a no-op (it was the only
+    caller of ``SCRAPE_PROGRESS``).
+
+    R20-3 also (incorrectly) removed ``SCRAPE_STARTED``
+    and ``SCRAPE_FAILED`` as dead — those events DO
+    have a subscriber: the ``ActionStateMixin`` in
+    ``ui/_action_state.py`` subscribes via
+    ``install_action_state_bus(started_event=...,
+    failed_event=...)`` which ``tab_playwright.py``
+    wires up with ``self.pw_wf.SCRAPE_STARTED`` /
+    ``self.pw_wf.SCRAPE_FAILED``. The R20 audit
+    walked direct ``bus.subscribe(event, ...)`` calls
+    and missed the INDIRECT subscription through
+    the mixin's kwargs. R21-0 restored both
+    constants + both publishes; the smoke test
+    (``tests/smoke/test_app.py``) now passes
+    again. ``SCRAPE_PROGRESS`` stays removed.
     """
 
-    def test_playwright_workflow_no_scrape_started_progress_failed(
+    def test_playwright_workflow_no_scrape_progress(
         self,
     ) -> None:
         from steam_review_tool.controllers import (
@@ -302,24 +316,34 @@ class TestNoScrapeStartedProgressFailedDeadEvents:
         import inspect
         full_src = inspect.getsource(playwright_workflow)
         code = _strip_comments_and_docstrings(full_src)
-        for dead in (
-            "SCRAPE_STARTED",
-            "SCRAPE_PROGRESS",
-            "SCRAPE_FAILED",
-        ):
-            assert dead not in code, (
-                f"PlaywrightWorkflow.{dead} is a dead bus "
-                f"event (zero subscribers) — removed in R20-3."
-            )
-
-    def test_no_publish_to_scrape_started(self) -> None:
-        """No file should publish ``"pw.scrape.started"``."""
-        hits = _grep_project(r'bus\.publish.*"pw\.scrape\.started"')
-        hits2 = _grep_project(r'bus\.publish\(self\.SCRAPE_STARTED')
-        assert not hits and not hits2, (
-            f"found publishers of 'pw.scrape.started' "
-            f"(the event has zero subscribers and was "
-            f"removed in R20-3): {hits + hits2}"
+        # ``SCRAPE_PROGRESS`` is the ONLY dead PW event.
+        assert "SCRAPE_PROGRESS" not in code, (
+            "PlaywrightWorkflow.SCRAPE_PROGRESS is a dead "
+            "bus event (zero subscribers) — removed in "
+            "R20-3 and the removal was CORRECT."
+        )
+        # ``SCRAPE_STARTED`` and ``SCRAPE_FAILED`` were
+        # incorrectly removed in R20-3 and restored in
+        # R21-0 (the ``ActionStateMixin`` IS a
+        # subscriber, indirectly via
+        # ``install_action_state_bus`` kwargs). The
+        # test must NOT assert they are absent — they
+        # are now live.
+        assert "SCRAPE_STARTED" in code, (
+            "PlaywrightWorkflow.SCRAPE_STARTED was "
+            "incorrectly removed in R20-3 (the R20 "
+            "audit missed the INDIRECT subscriber via "
+            "the ActionStateMixin). R21-0 restored it. "
+            "The test must assert the constant is "
+            "present (the event is LIVE)."
+        )
+        assert "SCRAPE_FAILED" in code, (
+            "PlaywrightWorkflow.SCRAPE_FAILED was "
+            "incorrectly removed in R20-3 (the R20 "
+            "audit missed the INDIRECT subscriber via "
+            "the ActionStateMixin). R21-0 restored it. "
+            "The test must assert the constant is "
+            "present (the event is LIVE)."
         )
 
     def test_no_publish_to_scrape_progress(self) -> None:
@@ -329,17 +353,67 @@ class TestNoScrapeStartedProgressFailedDeadEvents:
         assert not hits and not hits2, (
             f"found publishers of 'pw.scrape.progress' "
             f"(the event has zero subscribers and was "
-            f"removed in R20-3): {hits + hits2}"
+            f"correctly removed in R20-3): {hits + hits2}"
         )
 
-    def test_no_publish_to_scrape_failed(self) -> None:
-        """No file should publish ``"pw.scrape.failed"``."""
-        hits = _grep_project(r'bus\.publish.*"pw\.scrape\.failed"')
-        hits2 = _grep_project(r'bus\.publish\(self\.SCRAPE_FAILED')
-        assert not hits and not hits2, (
-            f"found publishers of 'pw.scrape.failed' "
-            f"(the event has zero subscribers and was "
-            f"removed in R20-3): {hits + hits2}"
+    def test_scrape_started_and_failed_are_live(self) -> None:
+        """The events that R20-3 incorrectly classified as
+        dead MUST be published + subscribed (R21-0
+        correction).
+
+        The ``ActionStateMixin`` in
+        ``ui/_action_state.py`` subscribes via
+        ``install_action_state_bus``; ``tab_playwright``
+        wires it up with the PW workflow's
+        ``SCRAPE_STARTED`` / ``SCRAPE_FAILED``
+        constants. The R20 audit walked direct
+        ``bus.subscribe(event, ...)`` calls and missed
+        the INDIRECT subscription through the mixin's
+        kwargs.
+        """
+        # Publisher: playwright_workflow._scrape_worker
+        from steam_review_tool.controllers import (
+            playwright_workflow,
+        )
+        import inspect
+        full_src = inspect.getsource(playwright_workflow)
+        code = _strip_comments_and_docstrings(full_src)
+        assert 'bus.publish(self.SCRAPE_STARTED' in code, (
+            "PlaywrightWorkflow._scrape_worker must "
+            "publish SCRAPE_STARTED — the ActionStateMixin "
+            "subscribes via tab_playwright's "
+            "install_action_state_bus call. R20-3 "
+            "incorrectly removed this publish; R21-0 "
+            "restored it."
+        )
+        assert 'bus.publish(self.SCRAPE_FAILED' in code, (
+            "PlaywrightWorkflow._scrape_worker must "
+            "publish SCRAPE_FAILED on exception — the "
+            "ActionStateMixin subscribes via "
+            "tab_playwright's install_action_state_bus "
+            "call. R20-3 incorrectly removed this "
+            "publish; R21-0 restored it."
+        )
+        # Subscriber: tab_playwright wires up the mixin
+        # with the PW workflow's constants.
+        from steam_review_tool.ui import tab_playwright
+        tp_src = inspect.getsource(tab_playwright)
+        tp_code = _strip_comments_and_docstrings(tp_src)
+        assert 'self.pw_wf.SCRAPE_STARTED' in tp_code, (
+            "tab_playwright must pass self.pw_wf."
+            "SCRAPE_STARTED to install_action_state_bus "
+            "— the ActionStateMixin needs the event name "
+            "to subscribe. R20-3 missed the indirect "
+            "subscriber chain (mixin kwargs → "
+            "tab_playwright constants → workflow "
+            "constants)."
+        )
+        assert 'self.pw_wf.SCRAPE_FAILED' in tp_code, (
+            "tab_playwright must pass self.pw_wf."
+            "SCRAPE_FAILED to install_action_state_bus "
+            "— the ActionStateMixin needs the event name "
+            "to subscribe. R20-3 missed the indirect "
+            "subscriber chain."
         )
 
     def test_scrape_completed_still_live(self) -> None:
@@ -355,9 +429,10 @@ class TestNoScrapeStartedProgressFailedDeadEvents:
         code = _strip_comments_and_docstrings(full_src)
         assert 'bus.publish(self.SCRAPE_COMPLETED' in code, (
             "PlaywrightWorkflow._scrape_worker must still "
-            "publish SCRAPE_COMPLETED — the R20-3 fix only "
-            "removed the dead SCRAPE_STARTED / PROGRESS / "
-            "FAILED, not the live SCRAPE_COMPLETED."
+            "publish SCRAPE_COMPLETED — the R20-3 fix "
+            "only removed the dead SCRAPE_PROGRESS (and "
+            "incorrectly removed SCRAPE_STARTED / "
+            "SCRAPE_FAILED, which R21-0 restored)."
         )
         # Subscriber: tab_playwright via bus.subscribe_once
         from steam_review_tool.ui import tab_playwright
@@ -367,6 +442,6 @@ class TestNoScrapeStartedProgressFailedDeadEvents:
         assert '"pw.scrape.completed"' in tp_code, (
             "tab_playwright must still subscribe_once to "
             "'pw.scrape.completed' — the R20-3 fix only "
-            "removed the dead PW events, not the live "
-            "SCRAPE_COMPLETED."
+            "removed the dead SCRAPE_PROGRESS, not the "
+            "live SCRAPE_COMPLETED."
         )
