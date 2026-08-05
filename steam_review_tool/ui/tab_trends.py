@@ -322,14 +322,6 @@ class TrendsTabController:
                 0, lambda: self._set_status_safe(msg[:120]),
             )
 
-    def _log_status(self, msg: str) -> None:
-        # Kept for any external caller that still uses the old
-        # single-threaded signature. New code paths should use
-        # ``_log_status_safe`` so the widget mutation is routed
-        # through ``after(0, …)``.
-        if self._status_lbl is not None:
-            self._status_lbl.configure(text=msg[:120])
-
     def _on_view_graph(self) -> None:
         from .popup_trends_chart import TrendsWindow
         win = TrendsWindow(

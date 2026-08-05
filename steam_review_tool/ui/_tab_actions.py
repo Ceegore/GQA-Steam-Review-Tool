@@ -208,11 +208,20 @@ class TabActions:
         path = filedialog.askdirectory(title="Pick Obsidian vault")
         if not path:
             return
-        self.dump_ctrl.obsidian_vault = Path(path)
+        # ``set_obsidian_vault`` updates the in-memory value AND
+        # persists to ``settings.json`` (R17-1 fix). The previous
+        # direct attribute write (``self.dump_ctrl.obsidian_vault
+        # = Path(path)``) only updated the in-memory value — a
+        # user who picked a vault without opening the Settings
+        # dialog would find the choice reverted on next launch.
+        self.dump_ctrl.set_obsidian_vault(Path(path))
         self._log(f"Obsidian vault → {path}")
 
     def clear_obsidian_vault(self) -> None:
-        self.dump_ctrl.obsidian_vault = None
+        # ``set_obsidian_vault(None)`` clears the in-memory
+        # value AND persists the empty choice (R17-1 fix). Same
+        # rationale as :meth:`pick_obsidian_vault`.
+        self.dump_ctrl.set_obsidian_vault(None)
         self._log("Obsidian vault cleared.")
 
     def open_settings(self) -> None:

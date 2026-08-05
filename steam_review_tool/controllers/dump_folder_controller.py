@@ -68,6 +68,44 @@ class DumpFolderController:
                 exc,
             )
 
+    def set_obsidian_vault(self, vault: Optional[Path]) -> None:
+        """Update the in-memory vault + persist the change.
+
+        Same R16-3 fix-shape as :meth:`set_dump_root`: a user
+        who picked a new Obsidian vault via the "Pick vault"
+        button (without opening the Settings dialog) used to
+        find the choice reverted on next launch because only
+        ``self.obsidian_vault`` was updated — ``settings.json``
+        was never touched, so ``settings_store.load()`` on
+        the next launch read the previous value and the
+        DEFAULTS merge filled the new key with ``""``. The
+        Settings dialog does persist the vault (it goes
+        through ``save_cb`` → ``_on_saved`` → ``save``); the
+        picker is the only path that bypasses the dialog and
+        therefore needs explicit persistence.
+        """
+        self.obsidian_vault = vault
+        try:
+            from ..services.settings_store import (
+                load as _load_settings,
+                save as _save_settings,
+            )
+            current = _load_settings()
+        except OSError as exc:
+            _log.warning(
+                "could not load settings for obsidian_vault persist: %s",
+                exc,
+            )
+            return
+        current["obsidian_vault"] = str(vault) if vault else ""
+        try:
+            _save_settings(current)
+        except OSError as exc:
+            _log.warning(
+                "could not persist obsidian_vault to settings: %s",
+                exc,
+            )
+
     def open_dump_folder(self) -> Optional[str]:
         return self._open(self.dump_root)
 

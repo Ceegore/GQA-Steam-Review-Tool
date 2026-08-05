@@ -278,9 +278,20 @@ class App(ctk.CTk):
         self.settings.update(data)
         try:
             _save(self.settings)
-        except Exception:
-            # Persisting is best-effort; don't crash the UI for it.
-            pass
+        except OSError as exc:
+            # The previous version had a bare ``except Exception:
+            # pass`` here which silently dropped the failure. A
+            # user clicking "Don't show again" in the welcome
+            # dialog would get NO indication that the setting
+            # was never persisted — and on next launch the
+            # greeting would reappear. Always log via the
+            # standard logger (R12-4 to R12-7 + R15-3 lesson)
+            # so the developer can spot the failure in stderr.
+            import logging
+            logging.getLogger(__name__).exception(
+                "could not persist settings: %s: %s",
+                type(exc).__name__, exc,
+            )
 
     def _on_open_settings(self) -> None:
         """Open the Settings popup. Tab controllers wire their
