@@ -207,8 +207,19 @@ def scrape_reviews(
                     if progress_cb:
                         try:
                             progress_cb(page, len(all_reviews), total_reported)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            # R26: the previous ``except Exception:
+                            # pass`` silently dropped any failure
+                            # from the caller-supplied progress
+                            # callback. Mirrors the R21 fix-shape:
+                            # ``_log.exception(...)`` captures the
+                            # traceback so the developer can spot
+                            # callback bugs in stderr (the scrape
+                            # itself keeps running, but the bug is
+                            # at least visible).
+                            _log.exception(
+                                "progress_cb callback failed: %s", exc,
+                            )
                     log(
                         f"Page {page}: +{len(page_reviews)} "
                         f"(kept {len(all_reviews)} / server total {total_reported})",

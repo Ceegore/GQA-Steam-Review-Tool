@@ -351,7 +351,17 @@ def scrape_reviews_subprocess(
                 log("Scrape cancelled by user.")
                 try:
                     proc.terminate()
-                except Exception:
+                except OSError:
+                    # R26: ``proc.terminate()`` raises
+                    # ``OSError`` (or its subclass
+                    # ``ProcessLookupError``) when the
+                    # process is already gone. The
+                    # previous bare ``except Exception: pass``
+                    # would also swallow unrelated errors
+                    # (e.g. ``AttributeError`` if ``proc``
+                    # is None). Narrow to ``OSError`` so
+                    # only the actually-expected case is
+                    # silently dropped.
                     pass
 
         try:
@@ -363,7 +373,15 @@ def scrape_reviews_subprocess(
             log("Scrape subprocess did not exit cleanly; terminating.")
             try:
                 proc.kill()
-            except Exception:
+            except OSError:
+                # R26: ``proc.kill()`` raises ``OSError``
+                # (or ``ProcessLookupError``) when the
+                # process is already gone. The previous
+                # bare ``except Exception: pass`` would
+                # also swallow unrelated errors. Narrow
+                # to ``OSError`` so only the
+                # actually-expected case is silently
+                # dropped.
                 pass
 
         log(f"Scrape done: {len(all_reviews)} reviews kept.")

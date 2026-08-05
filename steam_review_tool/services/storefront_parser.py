@@ -82,7 +82,20 @@ class StorefrontParser:
                 try:
                     out["wishlist"] = int(m.group(1).replace(",", ""))
                     break
-                except Exception:
+                except (ValueError, AttributeError):
+                    # R26: ``int(m.group(1).replace(...))``
+                    # can only raise ``ValueError`` (if
+                    # the matched group is non-numeric —
+                    # shouldn't happen since the regex
+                    # guarantees digits) or
+                    # ``AttributeError`` (if ``m`` is
+                    # None, guarded by the ``if m:``
+                    # check above). The previous bare
+                    # ``except Exception: pass`` would
+                    # also swallow unrelated errors
+                    # (e.g. ``TypeError``). Narrow to
+                    # the actually-expected exception
+                    # classes.
                     pass
 
         for pat in (
@@ -95,7 +108,8 @@ class StorefrontParser:
                 try:
                     out["followers"] = int(m.group(1).replace(",", ""))
                     break
-                except Exception:
+                except (ValueError, AttributeError):
+                    # R26: see wishlist block above.
                     pass
 
         for pat in (
@@ -108,7 +122,8 @@ class StorefrontParser:
                 try:
                     out["reviews"] = int(m.group(1).replace(",", ""))
                     break
-                except Exception:
+                except (ValueError, AttributeError):
+                    # R26: see wishlist block above.
                     pass
         return out
 
