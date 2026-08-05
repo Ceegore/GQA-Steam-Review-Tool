@@ -112,10 +112,15 @@ PLAYWRIGHT_JS_WAIT_SEC: float = 3.0
 # Sleep between watch-mode polls (slightly shorter than page-to-page).
 STEAM_POLL_DELAY_SEC: float = 0.3
 
-# Aliases for backwards compat — ``REVIEW_SORT`` was previously a public
-# export consumed by tab files. Both names now refer to the same data.
-REVIEW_SORT: list[str] = REVIEW_FILTERS
-REVIEW_TYPE: list[str] = REVIEW_TYPES
+
+# ``REVIEW_SORT`` and ``REVIEW_TYPE`` were previously listed as
+# "backwards-compat aliases" pointing at ``REVIEW_FILTERS`` /
+# ``REVIEW_TYPES``. A grep across the entire codebase (R18-2
+# audit) shows zero imports of either name — the rename from
+# ``REVIEW_SORT`` to ``REVIEW_FILTERS`` happened in an earlier
+# refactor and the aliases were left behind. Removed in R18-2
+# to eliminate the drift hazard (a future change to the source
+# list would have to be applied to both sites).
 
 
 __all__ = [
@@ -125,8 +130,6 @@ __all__ = [
     "STEAM_LANGUAGES",
     "REVIEW_FILTERS",
     "REVIEW_TYPES",
-    "REVIEW_SORT",
-    "REVIEW_TYPE",
     "GATE_BUTTON_TEXTS",
     "ANTI_DETECT_JS",
     "STEAM_API_PAGE_DELAY_SEC",

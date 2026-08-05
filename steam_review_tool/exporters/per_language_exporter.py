@@ -5,17 +5,41 @@ import re
 from pathlib import Path
 from typing import Optional, Any
 
+from ..core.logger import get_logger
 from ..models.export_context import ExportContext
 from ..utils.coercion import safe_int, safe_str
 from ..utils.markdown_utils import md_escape
 from .markdown_exporter import MarkdownExporter
 
 
+_log = get_logger(__name__)
+
+
+def _coerce_lang_key(lang: Any) -> str:
+    """Defensive coercion for the ``language`` field.
+
+    A hand-rolled / Apify-normalised review can carry a
+    non-string ``language`` value (int, list, None). The previous
+    ``(r.get("language") or "unknown").strip() or "unknown"``
+    crashed with ``AttributeError`` for any non-string
+    (e.g. an int) and the bare ``except OSError`` below
+    didn't even catch the AttributeError — it would
+    propagate up to the orchestrator and silently skip
+    the whole per-language export. The fix (R18-4) is
+    the same R12-1 to R12-3 pattern: ``isinstance`` check
+    first, then ``str`` coercion, then ``.strip()``.
+    """
+    if not isinstance(lang, str):
+        return "unknown"
+    s = lang.strip()
+    return s or "unknown"
+
+
 def group_by_language(reviews: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Return ``{lang_code: [review, ...]}``."""
     out: dict[str, list[dict[str, Any]]] = {}
     for r in reviews:
-        lang = (r.get("language") or "unknown").strip() or "unknown"
+        lang = _coerce_lang_key(r.get("language"))
         out.setdefault(lang, []).append(r)
     return out
 
@@ -36,6 +60,11 @@ def write_per_language(
     n = 0
     base = str(base_path_no_ext)
     for lang, lang_reviews in groups.items():
+        # ``group_by_language`` already coerces non-string
+        # language values to ``"unknown"`` (R18-4 fix) so
+        # ``lang`` is guaranteed to be a str here. The
+        # safe-char replacement below stays as defence
+        # against the legit string case.
         safe_lang = "".join(
             c if c.isalnum() or c in "-_." else "_" for c in lang
         ) or "unknown"
@@ -45,8 +74,24 @@ def write_per_language(
             md = MarkdownExporter.render(ctx, include_header=True)
             atomic_write_text(per_path, md)
             n += 1
-        except OSError:
-            pass
+        except OSError as exc:
+            # The previous version had a bare
+            # ``except OSError: pass`` here which silently
+            # dropped the per-language file write failure.
+            # A user with a full disk / read-only vault would
+            # see the main ``.md`` export succeed but every
+            # per-language file would silently fail — the
+            # orchestrator's returned count would be lower
+            # than expected with no visible signal. Log a
+            # warning (R12-4 to R12-7 + R17-3 lesson) so the
+            # dev can spot the partial export in stderr.
+            # Continue with the remaining languages so a
+            # single bad file doesn't drop the whole
+            # per-language batch.
+            _log.warning(
+                "per-language file write failed for %s: %s: %s",
+                per_path, type(exc).__name__, exc,
+            )
     return n
 
 

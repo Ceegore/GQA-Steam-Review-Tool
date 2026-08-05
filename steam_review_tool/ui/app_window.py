@@ -242,8 +242,17 @@ class App(ctk.CTk):
         if new_root_str:
             self.dump_repo = DumpRepository(new_root)
             self.dump_ctrl.set_dump_root(new_root)
+        # Route the obsidian-vault update through the chokepoint
+        # (``set_obsidian_vault``) instead of writing
+        # ``self.dump_ctrl.obsidian_vault`` directly. The Settings
+        # dialog already persisted the new value to disk via
+        # ``save``; the chokepoint's load+update+save is a
+        # redundant round-trip, but routing through the chokepoint
+        # is the consistent pattern (R17-1 + R18-1) so any future
+        # fix to the chokepoint (e.g. additional persistence
+        # guarantees) automatically applies to this path too.
         vault = data.get("obsidian_vault") or ""
-        self.dump_ctrl.obsidian_vault = Path(vault) if vault else None
+        self.dump_ctrl.set_obsidian_vault(Path(vault) if vault else None)
 
     # ---- menu / close ------------------------------------------------
 

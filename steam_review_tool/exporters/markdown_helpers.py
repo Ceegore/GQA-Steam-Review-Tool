@@ -102,9 +102,23 @@ def render_summary(reviews: list[dict[str, Any]]) -> list[str]:
     # review rows; treat those the same as "missing" so the
     # language table is consistent and ``None`` never becomes a
     # ``dict`` key (which is invalid in JSON / Markdown tables).
+    # The same review-set can also carry a NON-string
+    # ``language`` (int / list / dict) — a hand-rolled test or
+    # a buggy normaliser. The previous ``r.get("language") or
+    # "—"`` short-circuited the int to itself (since non-zero
+    # int is truthy) and then crashed ``md_escape(k)`` with
+    # ``AttributeError: 'int' object has no attribute
+    # 'replace'`` for the table cell. The R18-4 fix coerces
+    # the language value to a str (falling back to ``"—"`` on
+    # any non-string type) before storing in the dict. Same
+    # R12-1 to R12-3 defensive-coercion pattern.
     langs: dict[str, int] = {}
     for r in reviews:
-        lang = r.get("language") or "—"
+        raw_lang = r.get("language")
+        if raw_lang is None or not isinstance(raw_lang, str):
+            lang = "—"
+        else:
+            lang = raw_lang or "—"
         langs[lang] = langs.get(lang, 0) + 1
 
     lines = [
