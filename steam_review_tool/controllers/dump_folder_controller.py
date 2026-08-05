@@ -3,8 +3,11 @@
 Owns the "📁 Set dump folder…", "📂 Open dump folder",
 "🎮 Open game folder" actions and the Obsidian-vault copy step.
 
-Communicates only through the event bus, so any tab or controller can
-ask it to do something without knowing who else is listening.
+The tabs call :meth:`set_dump_root` / :meth:`set_obsidian_vault`
+directly (the R16-3 / R17-1 chokepoints) and re-render their labels
+in the same handler. The controller used to publish a
+``dump.root.changed`` bus event too, but a R19-2 audit found
+zero subscribers — the event was dead and was removed.
 """
 from __future__ import annotations
 
@@ -12,7 +15,6 @@ import logging
 from pathlib import Path
 from typing import Callable, Optional
 
-from ..core.event_bus import bus
 from ..exporters.obsidian_copier import copy_to_obsidian_vault
 from ..utils.os_open import open_path_in_os
 
@@ -37,7 +39,6 @@ class DumpFolderController:
 
     def set_dump_root(self, path: Path) -> None:
         self.dump_root = path
-        bus.publish("dump.root.changed", path=str(path))
         # Persist the new dump root to ``settings.json`` so
         # the choice survives an app restart. The previous
         # version only updated the in-memory ``self.dump_root``,
@@ -47,6 +48,18 @@ class DumpFolderController:
         # The Settings dialog is the only OTHER path that
         # touches ``settings.json.dump_root``; both paths
         # now converge to the same on-disk value.
+        #
+        # The previous version of this method also
+        # ``bus.publish("dump.root.changed", path=str(path))``
+        # but a grep across the codebase (R19-2 audit)
+        # found zero subscribers — the event was dead.
+        # The tabs that react to a dump-root change
+        # (recreate ``dump_repo``, refresh the label)
+        # already do so directly in
+        # ``_on_pick_dump_root`` after calling the
+        # chokepoint. Removed in R19-2 to eliminate
+        # the drift hazard (same R17-2 / R18-2
+        # "no consumer" anti-pattern).
         try:
             from ..services.settings_store import (
                 load as _load_settings,

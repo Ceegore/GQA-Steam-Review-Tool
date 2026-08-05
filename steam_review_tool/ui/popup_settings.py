@@ -12,21 +12,24 @@ from typing import Callable, Optional, Any
 import customtkinter as ctk
 
 from ..services import settings_store
+from ..utils.coercion import safe_coerce_str
 
 
-def _safe_str(value: Any, default: str = "") -> str:
-    """Coerce a settings value to ``str``, defaulting on None.
-
-    Settings JSON may have present-but-None values (e.g. a key
-    that was explicitly set to null by a hand-edit or migration).
-    ``tk.StringVar(value=None)`` would set the value to the literal
-    string ``"None"`` (Tk's str-coercion), which is a confusing
-    default to show the user. This helper collapses None into
-    the empty default.
-    """
-    if value is None:
-        return default
-    return str(value)
+# Note: the previous version of this module defined a private
+# ``_safe_str(value, default)`` that did ``str(value)`` for any
+# non-None value. That implementation has 2 problems:
+#   1. A hand-edited / migrated settings.json with a list /
+#      dict value for ``dump_root`` would render as the str()
+#      of the Python list (``"['a', 'b']"``) in the entry
+#      field — confusing for the user.
+#   2. Duplicates the public ``safe_coerce_str`` helper
+#      (utils.coercion), so a future change to the public
+#      helper would have to be applied to this site too
+#      (same R4/R5 helper-consolidation lesson).
+# The R19-1 fix uses the public ``safe_coerce_str``
+# instead. Tests in ``test_bug_hunt_round_19`` pin the new
+# behaviour (a list value renders as the default ``""``,
+# not as the str() of the list).
 
 
 class SettingsDialog:
@@ -65,7 +68,7 @@ class SettingsDialog:
             anchor="w", padx=4, pady=(6, 2),
         )
         self._dump_root_var = tk.StringVar(
-            value=_safe_str(data.get("dump_root"), ""),
+            value=safe_coerce_str(data.get("dump_root"), ""),
         )
         ctk.CTkEntry(body, textvariable=self._dump_root_var, width=500).pack(
             fill="x", padx=4, pady=2,
@@ -76,7 +79,7 @@ class SettingsDialog:
             anchor="w", padx=4, pady=(10, 2),
         )
         self._obsidian_var = tk.StringVar(
-            value=_safe_str(data.get("obsidian_vault"), ""),
+            value=safe_coerce_str(data.get("obsidian_vault"), ""),
         )
         ctk.CTkEntry(body, textvariable=self._obsidian_var, width=500).pack(
             fill="x", padx=4, pady=2,
@@ -87,7 +90,7 @@ class SettingsDialog:
             anchor="w", padx=4, pady=(10, 2),
         )
         self._apify_var = tk.StringVar(
-            value=_safe_str(data.get("apify_token"), ""),
+            value=safe_coerce_str(data.get("apify_token"), ""),
         )
         ctk.CTkEntry(body, textvariable=self._apify_var, width=500, show="•").pack(
             fill="x", padx=4, pady=2,
@@ -109,7 +112,7 @@ class SettingsDialog:
         self._ai_prompt_text = ctk.CTkTextbox(body, height=120)
         self._ai_prompt_text.pack(fill="x", padx=4, pady=2)
         self._ai_prompt_text.insert(
-            "1.0", _safe_str(data.get("ai_prompt_template"), ""),
+            "1.0", safe_coerce_str(data.get("ai_prompt_template"), ""),
         )
 
         # ---- Buttons -------------------------------------------------

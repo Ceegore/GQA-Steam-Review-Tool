@@ -395,16 +395,36 @@ class TestPopupSettingsNoNoneLiteral:
     to the literal string ``"None"`` (Tk's str-coercion), and
     the user would see ``None`` pre-filled in the entry.
 
-    Fix: ``_safe_str(value, default)`` collapses None to the
-    empty default before constructing the StringVar.
+    Fix: ``_safe_str(value, default)`` collapsed None to the
+    empty default before constructing the StringVar. The
+    R19-1 refactor replaced the private ``_safe_str``
+    duplicate with the public ``safe_coerce_str`` from
+    ``utils.coercion`` — the contract is the same (no
+    ``"None"`` literal in entry fields) but the helper
+    is now shared with the rest of the codebase.
     """
 
-    def test_safe_str_helper_in_popup_settings(self) -> None:
-        from steam_review_tool.ui.popup_settings import _safe_str
-        assert _safe_str("hello", "x") == "hello"
-        assert _safe_str("", "x") == ""
-        assert _safe_str(None, "x") == "x"
-        assert _safe_str(42, "x") == "42"
+    def test_safe_coerce_str_used_by_popup_settings(self) -> None:
+        from steam_review_tool.utils.coercion import safe_coerce_str
+        # Same contract as the old private ``_safe_str``
+        # for the cases the settings dialog cares about:
+        # None / non-string → default; int / float / bool →
+        # str(value); str → str (whitespace-only → default).
+        assert safe_coerce_str("hello", "x") == "hello"
+        # Empty string is treated as "absent" (returns
+        # the default). The R5 "no None in entry" contract
+        # is preserved — both ``""`` and ``None`` render
+        # as the same "empty" entry field.
+        assert safe_coerce_str("", "x") == "x"
+        assert safe_coerce_str(None, "x") == "x"
+        assert safe_coerce_str(42, "x") == "42"
+        # R19-1 also handles list / dict → default
+        # (was previously ``str(value)`` = Python repr
+        # garbage in the entry field).
+        assert safe_coerce_str(["a", "b"], "x") == "x"
+        assert safe_coerce_str({"a": 1}, "x") == "x"
+        # Whitespace-only string also → default.
+        assert safe_coerce_str("   ", "x") == "x"
 
 
 # ---------------------------------------------------------------------------
