@@ -7,6 +7,7 @@ identical "since" semantics.
 from __future__ import annotations
 
 import logging
+import tkinter as tk
 from typing import Callable, Optional, Any
 
 import customtkinter as ctk
@@ -78,18 +79,40 @@ def build_since_section(
 
     # Initial label state
     def _refresh_label() -> None:
-        hours = parse_since_preset(preset_var.get())
-        if hours == 0:
-            since_label.configure(text="(all time)")
-        elif hours > 0:
-            since_label.configure(text=f"({hours} h back)")
-        else:
-            d = date_entry.get().strip()
-            t = time_entry.get().strip()
-            since_label.configure(
-                text=(f"({d} {t}".rstrip() + ")") if d or t else "(custom)",
-            )
-        clock_lbl.configure(text=f"🕒 Now: {current_berlin_str()} (Berlin)")
+        try:
+            hours = parse_since_preset(preset_var.get())
+            if hours == 0:
+                since_label.configure(text="(all time)")
+            elif hours > 0:
+                since_label.configure(text=f"({hours} h back)")
+            else:
+                d = date_entry.get().strip()
+                t = time_entry.get().strip()
+                since_label.configure(
+                    text=(f"({d} {t}".rstrip() + ")") if d or t else "(custom)",
+                )
+            clock_lbl.configure(text=f"🕒 Now: {current_berlin_str()} (Berlin)")
+        except tk.TclError:
+            # R29: the since section's widget teardown
+            # race. ``preset_var`` / ``date_entry`` /
+            # ``time_entry`` / ``since_label`` /
+            # ``clock_lbl`` are all Tk variables /
+            # widgets. If the parent is destroyed
+            # before the trace fires (e.g. the user
+            # closes the tab mid-``_on_preset_change``),
+            # the ``.get()`` / ``.configure()`` calls
+            # raise ``tk.TclError``. The previous
+            # version had NO try/except — the
+            # exception propagated out of
+            # ``_refresh_label`` and crashed the
+            # preset change. R29 wraps the widget
+            # ops in ``try: ... except tk.TclError:
+            # pass`` so only the actually-expected
+            # teardown race is silently dropped;
+            # programming bugs (TypeError if
+            # ``current_berlin_str()`` returns
+            # something weird) still propagate.
+            pass
 
     _refresh_label()
 

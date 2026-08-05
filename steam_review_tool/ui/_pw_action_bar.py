@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import customtkinter as ctk
+import tkinter as tk
 
 from ._responsive import WrapFrame
 from .tooltip import ToolTip
@@ -162,15 +163,30 @@ def build_pw_action_bar(
         btn = refs.export_btn
         if btn is None:
             return
-        wants_extra = (
-            csv_var.get() == "1"
-            or json_var.get() == "1"
-            or per_lang_var.get() == "1"
-        )
-        btn.configure(
-            text=_EXPORT_GENERATE_ALL_TEXT
-            if wants_extra else _EXPORT_BASE_TEXT,
-        )
+        try:
+            wants_extra = (
+                csv_var.get() == "1"
+                or json_var.get() == "1"
+                or per_lang_var.get() == "1"
+            )
+            btn.configure(
+                text=_EXPORT_GENERATE_ALL_TEXT
+                if wants_extra else _EXPORT_BASE_TEXT,
+            )
+        except tk.TclError:
+            # R29: widget teardown race. Same
+            # pattern as ``_api_action_bar``
+            # ``_refresh_export_text`` — the
+            # ``csv_var`` / ``json_var`` /
+            # ``per_lang_var`` StringVars and the
+            # ``export_btn`` CTkButton can be
+            # destroyed before the trace fires.
+            # The previous version had NO
+            # try/except. R29 wraps in
+            # ``try: ... except tk.TclError: pass``
+            # so only the actually-expected
+            # teardown race is silently dropped.
+            pass
 
     csv_var.trace_add("write", _refresh_export_text)
     json_var.trace_add("write", _refresh_export_text)
