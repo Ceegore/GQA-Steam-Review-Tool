@@ -1,13 +1,34 @@
 """Dump-folder controller.
 
-Owns the "📁 Set dump folder…", "📂 Open dump folder",
-"🎮 Open game folder" actions and the Obsidian-vault copy step.
+Owns the "📁 Set dump folder…", "📂 Open dump folder"
+actions and the vault-persistence chokepoints.
 
 The tabs call :meth:`set_dump_root` / :meth:`set_obsidian_vault`
 directly (the R16-3 / R17-1 chokepoints) and re-render their labels
 in the same handler. The controller used to publish a
 ``dump.root.changed`` bus event too, but a R19-2 audit found
 zero subscribers — the event was dead and was removed.
+
+R27 removed two more dead public methods:
+  - :meth:`DumpFolderController.open_game_folder` (defined
+    but never called from any UI / controller / test).
+    The "open game folder" feature is documented in the
+    help text but the wiring was never finished.
+  - :meth:`DumpFolderController.sync_to_obsidian` (defined
+    but never called). The actual Obsidian sync happens
+    via the export flow's ``run_export(..., obsidian_vault=...)``
+    parameter (see :mod:`exporters.export_orchestrator`),
+    which passes the vault through to
+    :func:`exporters.obsidian_copier.copy_to_obsidian_vault`
+    directly. The wrapper method on
+    :class:`DumpFolderController` was a leftover from an
+    earlier design where the controller was the single
+    chokepoint.
+
+R27 also removed the now-unused
+``from ..exporters.obsidian_copier import copy_to_obsidian_vault``
+import (the function is still used by
+:mod:`exporters.export_orchestrator`).
 """
 from __future__ import annotations
 
@@ -15,7 +36,6 @@ import logging
 from pathlib import Path
 from typing import Callable, Optional
 
-from ..exporters.obsidian_copier import copy_to_obsidian_vault
 from ..utils.os_open import open_path_in_os
 
 
@@ -130,17 +150,6 @@ class DumpFolderController:
 
     def open_dump_folder(self) -> Optional[str]:
         return self._open(self.dump_root)
-
-    def open_game_folder(self, app_id: int, safe_name: str) -> Optional[str]:
-        folder = self.dump_root / f"{app_id}_{safe_name}"
-        return self._open(folder)
-
-    # ---- obsidian sync -------------------------------------------------
-
-    def sync_to_obsidian(self, exported_path: Path) -> Optional[str]:
-        if not self.obsidian_vault:
-            return None
-        return copy_to_obsidian_vault(exported_path, self.obsidian_vault)
 
 
 __all__ = ["DumpFolderController"]
