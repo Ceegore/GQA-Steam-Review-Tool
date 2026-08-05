@@ -6,6 +6,7 @@ shim before navigating and pre-dismiss common age / cookie gates.
 from __future__ import annotations
 
 from ..core.constants import ANTI_DETECT_JS, GATE_BUTTON_TEXTS
+from ._playwright_safe import _PlaywrightError
 
 
 def inject_anti_detect(page) -> None:
@@ -31,7 +32,18 @@ def try_dismiss_gates(page, log=None) -> None:
                 if log is not None:
                     log(f"Dismissed gate: {text}")
                 page.wait_for_timeout(800)
-        except Exception:
+        except _PlaywrightError:
+            # R28: the previous ``except Exception: pass``
+            # silently dropped ALL exceptions, including
+            # programming bugs (AttributeError, TypeError)
+            # that should propagate. Narrow to
+            # ``_PlaywrightError`` (Playwright's own
+            # Error / TimeoutError / TargetClosedError)
+            # so only the actually-expected case is
+            # silently dropped. The helper module
+            # ``_playwright_safe`` falls back to
+            # ``Exception`` if Playwright is not
+            # installed (so the app still functions).
             pass
 
 

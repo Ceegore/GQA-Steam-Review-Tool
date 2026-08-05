@@ -27,6 +27,7 @@ import sys
 import time
 from typing import Any, Callable, Optional
 
+from ._playwright_safe import _PlaywrightError
 from ..core.constants import (
     ANTI_DETECT_JS, DEFAULT_USER_AGENT, PLAYWRIGHT_JS_WAIT_SEC,
     STEAM_LANGUAGES,
@@ -236,7 +237,16 @@ def scrape_reviews(
             finally:
                 try:
                     browser.close()
-                except Exception:
+                except _PlaywrightError:
+                    # R28: narrow to Playwright's own
+                    # Error (and subclasses) so
+                    # programming bugs like
+                    # ``AttributeError`` (if ``browser``
+                    # is None) propagate instead of
+                    # being silently dropped. The
+                    # ``_playwright_safe`` helper falls
+                    # back to ``Exception`` when
+                    # Playwright is not installed.
                     pass
     except Exception as exc:
         msg = f"Playwright scrape failed: {type(exc).__name__}: {exc}"

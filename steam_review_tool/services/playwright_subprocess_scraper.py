@@ -105,7 +105,12 @@ def dismiss_gates(page):
                 btn.first.click(timeout=1500)
                 log("Dismissed gate: " + repr(text))
                 page.wait_for_timeout(400)
-        except Exception:
+        except Error:
+            # R28: narrow to Playwright's own Error
+            # class (imported above from
+            # playwright.sync_api) so programming
+            # bugs (AttributeError, etc.) propagate
+            # instead of being silently dropped.
             pass
 
 
@@ -122,7 +127,7 @@ def main():
         " num_per_page=" + str(num_per_page))
 
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import sync_playwright, Error
     except Exception as exc:
         emit({"type": "error",
               "error": "playwright Python package not installed: " + str(exc)})
@@ -218,7 +223,13 @@ def main():
             finally:
                 try:
                     browser.close()
-                except Exception:
+                except Error:
+                    # R28: narrow to Playwright's own
+                    # Error class (imported above) so
+                    # programming bugs (AttributeError
+                    # if ``browser`` is None, TypeError,
+                    # etc.) propagate instead of being
+                    # silently dropped.
                     pass
     except Exception as exc:
         emit({"type": "error", "error": type(exc).__name__ + ": " + str(exc)})
