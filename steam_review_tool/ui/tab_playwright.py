@@ -12,6 +12,7 @@ scraper that bypasses Steam's JSON cache).
 from __future__ import annotations
 
 import threading
+import tkinter as tk
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -212,7 +213,7 @@ class PlaywrightTabController(ActionStateMixin):
             self._log_box.configure(state="normal")
             self._log_box.delete("1.0", "end")
             self._log_box.configure(state="disabled")
-        except Exception:
+        except tk.TclError:
             pass
 
     def update_clock(self, now_str: str) -> None:
@@ -225,7 +226,7 @@ class PlaywrightTabController(ActionStateMixin):
         if self._progress is not None and total:
             try:
                 self._progress.set(min(fetched / total, 1.0))
-            except Exception:
+            except tk.TclError:
                 pass
         if self._progress_lbl is not None:
             self._progress_lbl.configure(text=f"Page {page} · {fetched}/{total}")
@@ -244,7 +245,7 @@ class PlaywrightTabController(ActionStateMixin):
                 self._dump_label.configure(
                     text=f"📂 {self.dump_ctrl.dump_root}",
                 )
-        except Exception:
+        except tk.TclError:
             pass
 
     # ---- bus events --------------------------------------------------
@@ -267,7 +268,7 @@ class PlaywrightTabController(ActionStateMixin):
 
         try:
             target.after(0, apply)
-        except Exception:
+        except tk.TclError:
             pass
 
     # ---- handlers ----------------------------------------------------
@@ -476,7 +477,7 @@ class PlaywrightTabController(ActionStateMixin):
         f.offtopic_var.set("false")
         try:
             f.playtime_min_entry.delete(0, "end")
-        except Exception:
+        except tk.TclError:
             pass
         if self._since:
             try:
@@ -484,7 +485,7 @@ class PlaywrightTabController(ActionStateMixin):
                 self._since["date_entry"].delete(0, "end")
                 self._since["time_entry"].delete(0, "end")
                 self._since["refresh"]()
-            except Exception:
+            except tk.TclError:
                 pass
         self._log("Filters reset to defaults.")
 

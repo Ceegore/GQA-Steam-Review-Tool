@@ -38,13 +38,13 @@ class ToolTip:
         if self._after_id is not None:
             try:
                 self.widget.after_cancel(self._after_id)
-            except Exception:
+            except tk.TclError:
                 pass
             self._after_id = None
         if self._tip_window is not None:
             try:
                 self._tip_window.destroy()
-            except Exception:
+            except tk.TclError:
                 pass
             self._tip_window = None
 
@@ -54,7 +54,7 @@ class ToolTip:
         try:
             x = self.widget.winfo_pointerx() + 12
             y = self.widget.winfo_pointery() + 18
-        except Exception:
+        except tk.TclError:
             return
         self._tip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)

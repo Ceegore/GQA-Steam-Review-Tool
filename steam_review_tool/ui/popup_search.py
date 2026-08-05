@@ -116,7 +116,7 @@ class SearchWindow:
         if self._after_id is not None:
             try:
                 top.after_cancel(self._after_id)
-            except Exception:
+            except tk.TclError:
                 pass
         # Bump the generation counter — the in-flight worker
         # (if any) will see this and abort instead of writing

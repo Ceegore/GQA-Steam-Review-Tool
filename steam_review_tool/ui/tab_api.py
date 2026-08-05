@@ -12,6 +12,7 @@ responsive filter grid, ``_api_action_bar.py`` for the action bar,
 from __future__ import annotations
 
 import threading
+import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Callable, Optional
@@ -195,14 +196,14 @@ class ApiTabController(ActionStateMixin):
             self._log_box.configure(state="normal")
             self._log_box.delete("1.0", "end")
             self._log_box.configure(state="disabled")
-        except Exception:
+        except tk.TclError:
             pass
 
     def update_progress(self, page: int, fetched: int, total: int) -> None:
         if self._progress is not None and total:
             try:
                 self._progress.set(min(fetched / total, 1.0))
-            except Exception:
+            except tk.TclError:
                 pass
         if self._progress_lbl is not None:
             self._progress_lbl.configure(text=f"Page {page} · {fetched}/{total}")
@@ -228,7 +229,7 @@ class ApiTabController(ActionStateMixin):
                 self._obsidian_label.configure(
                     text=str(v) if v else "(not set)",
                 )
-        except Exception:
+        except tk.TclError:
             pass
 
     # ---- filter helpers ---------------------------------------------
@@ -269,14 +270,14 @@ class ApiTabController(ActionStateMixin):
         f.first_24h_var.set("all"); f.backend_var.set("Steam API")
         for e in (f.helpful_entry, f.playtime_min_entry):
             try: e.delete(0, "end")
-            except Exception: pass
+            except tk.TclError: pass
         if self._since:
             try:
                 self._since["preset_var"].set("all time")
                 self._since["date_entry"].delete(0, "end")
                 self._since["time_entry"].delete(0, "end")
                 self._since["refresh"]()
-            except Exception:
+            except tk.TclError:
                 pass
         self._log("Filters reset to defaults.")
 

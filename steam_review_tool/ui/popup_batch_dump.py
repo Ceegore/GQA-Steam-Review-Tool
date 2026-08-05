@@ -6,6 +6,7 @@ the original BatchDumpDialog.
 from __future__ import annotations
 
 import threading
+import tkinter as tk
 from typing import Callable, Optional
 
 import customtkinter as ctk
@@ -211,7 +212,7 @@ class BatchDumpDialog:
                                 text=f"({i}/{len(ids)}) Processing {a}…"
                             ),
                         )
-                    except Exception:
+                    except tk.TclError:
                         # Top was destroyed mid-batch — stop the
                         # worker rather than letting the host
                         # callback race against a torn-down
@@ -228,14 +229,14 @@ class BatchDumpDialog:
                                 text=f"Error: {e}"
                             ),
                         )
-                    except Exception:
+                    except tk.TclError:
                         return
         if top is not None and start_btn is not None:
             try:
                 top.after(
                     0, lambda: start_btn.configure(state="normal"),
                 )
-            except Exception:
+            except tk.TclError:
                 pass
 
 

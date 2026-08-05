@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import customtkinter as ctk
+import tkinter as tk
 
 from .tooltip import ToolTip
 
@@ -101,7 +102,7 @@ class ResponsiveGrid:
     def build(self) -> None:
         try:
             self.outer.update_idletasks()
-        except Exception:
+        except tk.TclError:
             pass
         self._relayout()
 
@@ -113,7 +114,7 @@ class ResponsiveGrid:
         if self._after_id is not None:
             try:
                 self.outer.after_cancel(self._after_id)
-            except Exception:
+            except tk.TclError:
                 pass
             self._after_id = None
         self._after_id = self.outer.after(self._DEBOUNCE_MS, self._do_reflow)
@@ -129,7 +130,7 @@ class ResponsiveGrid:
         try:
             try:
                 width = self.outer.winfo_width()
-            except Exception:
+            except tk.TclError:
                 return
             if width < 50 or not self._rows:
                 return
@@ -140,7 +141,7 @@ class ResponsiveGrid:
             for child in self.outer.winfo_children():
                 try:
                     child.destroy()
-                except Exception:
+                except tk.TclError:
                     pass
             self._col_frames = []
 
@@ -250,7 +251,7 @@ class WrapFrame(ctk.CTkFrame):
         if self._after_id is not None:
             try:
                 self.after_cancel(self._after_id)
-            except Exception:
+            except tk.TclError:
                 pass
             self._after_id = None
         self._after_id = self.after(self._DEBOUNCE_MS, self._relayout)
@@ -263,7 +264,7 @@ class WrapFrame(ctk.CTkFrame):
             self._after_id = None
             try:
                 width = self.winfo_width()
-            except Exception:
+            except tk.TclError:
                 return
             if width < 50 or not self._items:
                 return
@@ -271,7 +272,7 @@ class WrapFrame(ctk.CTkFrame):
             for w, _ in self._items:
                 try:
                     w.place_forget()
-                except Exception:
+                except tk.TclError:
                     pass
 
             lefts = [w for w, s in self._items if s == "left"]
@@ -332,7 +333,7 @@ class WrapFrame(ctk.CTkFrame):
             # Reserve vertical room so the parent doesn't clip us.
             try:
                 self.configure(height=y if y > 0 else 1)
-            except Exception:
+            except tk.TclError:
                 pass
         finally:
             self._reflowing = False
@@ -342,7 +343,7 @@ class WrapFrame(ctk.CTkFrame):
     ) -> None:
         try:
             widget.place(in_=self, x=x, y=y)
-        except Exception:
+        except tk.TclError:
             pass
 
     def _req_size(self, widget: ctk.CTkBaseClass) -> tuple[int, int]:
@@ -351,7 +352,7 @@ class WrapFrame(ctk.CTkFrame):
             w = max(0, int(widget.winfo_reqwidth())) + 2 * self._padx
             h = max(0, int(widget.winfo_reqheight())) + 2 * self._pady
             return (w, h)
-        except Exception:
+        except tk.TclError:
             return (100, 30)
 
 

@@ -120,7 +120,7 @@ class WelcomeDialog:
             top.geometry(
                 f"+{mx + (mw - tw) // 2}+{my + (mh - th) // 2}"
             )
-        except Exception:
+        except tk.TclError:
             pass
         top.focus_force()
 
@@ -200,7 +200,7 @@ class WelcomeDialog:
             ctk.CTkLabel(parent, image=self._logo_image, text="").pack(
                 side="left", padx=(2, 0), pady=2,
             )
-        except Exception:
+        except tk.TclError:
             # Image-load / CTkImage failures are non-fatal — the
             # popup still works without the logo.
             self._logo_image = None

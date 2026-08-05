@@ -20,6 +20,7 @@ underlying state changes (e.g. on ``app.loaded``).
 """
 from __future__ import annotations
 
+import tkinter as tk
 from typing import Any, Optional
 
 from ..core.event_bus import bus
@@ -62,7 +63,7 @@ class ActionStateMixin:
             return
         try:
             btn.configure(state=state)
-        except Exception:
+        except tk.TclError:
             pass
 
     def _has_saved_cursor(self, source: str) -> bool:
