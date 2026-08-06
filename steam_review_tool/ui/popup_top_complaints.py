@@ -51,8 +51,12 @@ class TopComplaintsDialog:
         sections (theme boxes + playtime histogram) are filled
         in by :meth:`_populate` once the worker thread finishes.
         """
+        # R32-7: replace the type-narrowing ``assert top is not None``
+        # with an early-return guard (see popup_batch_dump for the
+        # full reasoning — ``assert`` is stripped under ``python -O``).
         top = self._top
-        assert top is not None
+        if top is None:
+            return
         ctk.CTkLabel(
             top, text="Top complaints & praise",
             font=("", 14, "bold"),

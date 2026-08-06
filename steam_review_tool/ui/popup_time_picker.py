@@ -59,8 +59,17 @@ class TimePickerPopup:
         self._min_var = tk.IntVar(value=m)
 
     def _build(self) -> None:
+        # R32-6: replace the compound type-narrowing
+        # ``assert top is not None and self._hour_var and self._min_var``
+        # with an early-return guard (see popup_batch_dump for the
+        # full reasoning — ``assert`` is stripped under ``python -O``).
+        # ``_hour_var`` and ``_min_var`` are set in ``__init__`` so the
+        # check is purely defensive against an external caller that
+        # somehow cleared them, but the early-return is the same
+        # "nothing to do" idiom as the other popups.
         top = self._top
-        assert top is not None and self._hour_var and self._min_var
+        if top is None or self._hour_var is None or self._min_var is None:
+            return
 
         ctk.CTkLabel(top, text="Time (Berlin)", font=("", 12, "bold")).pack(
             pady=(8, 4),

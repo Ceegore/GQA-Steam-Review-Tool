@@ -51,9 +51,21 @@ def copy_to_clipboard(root: tk.Misc, text: str) -> None:
     try:
         root.clipboard_clear()
         root.clipboard_append(text)
-    except Exception:
-        # Clipboard operations can fail in headless test environments;
-        # the user-visible action ("copy") just no-ops in that case.
+    # R32-13: narrow the broad ``except Exception`` to the
+    # specific Tk error class. ``root.clipboard_clear()`` and
+    # ``root.clipboard_append()`` only raise ``tk.TclError`` (e.g.
+    # in headless test environments without a display, or when
+    # the clipboard is owned by another process on X11). Catching
+    # the bare ``Exception`` would also swallow programming bugs
+    # like ``AttributeError`` if ``root`` were ``None``, hiding
+    # them as silent no-ops. The R25 lesson (31 UI widget-op
+    # narrowings) applies here too — "too-broad except" is the
+    # same anti-pattern regardless of whether the body is
+    # widget-op or clipboard-op.
+    except tk.TclError:
+        # Clipboard operations can fail in headless test
+        # environments; the user-visible action ("copy") just
+        # no-ops in that case.
         pass
 
 

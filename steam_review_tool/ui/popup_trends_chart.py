@@ -49,8 +49,12 @@ class TrendsWindow:
     # ---- internals -----------------------------------------------------
 
     def _build(self) -> None:
+        # R32-8: replace the type-narrowing ``assert top is not None``
+        # with an early-return guard (see popup_batch_dump for the
+        # full reasoning — ``assert`` is stripped under ``python -O``).
         top = self._top
-        assert top is not None
+        if top is None:
+            return
 
         bar = ctk.CTkFrame(top, fg_color="transparent")
         bar.pack(fill="x", padx=10, pady=(10, 4))

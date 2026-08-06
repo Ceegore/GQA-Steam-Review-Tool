@@ -68,8 +68,12 @@ class DatePickerPopup:
             self._year, self._month = now.year, now.month
 
     def _build(self) -> None:
+        # R32-2: replace the type-narrowing ``assert top is not None``
+        # with an early-return guard (see popup_batch_dump for the
+        # full reasoning — ``assert`` is stripped under ``python -O``).
         top = self._top
-        assert top is not None
+        if top is None:
+            return
 
         nav = ctk.CTkFrame(top, fg_color="transparent")
         nav.pack(fill="x", padx=8, pady=(8, 4))

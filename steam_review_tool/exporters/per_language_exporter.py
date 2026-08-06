@@ -129,12 +129,30 @@ def build_summary(
 
     purchases = {"steam": 0, "non_steam": 0, "unknown": 0}
     for r in reviews:
-        if r.get("steam_purchase") is True:
-            purchases["steam"] += 1
-        elif r.get("steam_purchase") is False:
-            purchases["non_steam"] += 1
-        else:
+        # R32-15: classify purchases by truthiness rather than
+        # ``is True`` / ``is False``. The Steam API (and
+        # third-party aggregators like Apify) can return
+        # ``"steam_purchase"`` as ``1`` / ``0``, ``"true"`` /
+        # ``"false"``, or the canonical bool — the old
+        # ``is True`` / ``is False`` singleton check would
+        # silently bucket every truthy/falsy non-bool into
+        # ``"unknown"``, undercounting purchased / non-purchased
+        # reviews. ``bool(value)`` collapses all truthy values
+        # (including ``1`` and ``"true"``) to ``True`` and all
+        # falsy values (including ``0``, ``""``, ``"false"``,
+        # ``None``) to ``False`` — matching the intent of the
+        # CSV exporter which already uses
+        # ``int(bool(r.get("steam_purchase")))`` for the same
+        # field.
+        v = r.get("steam_purchase")
+        if v is None or isinstance(v, str) and v.lower() not in (
+            "true", "false", "1", "0",
+        ):
             purchases["unknown"] += 1
+        elif bool(v):
+            purchases["steam"] += 1
+        else:
+            purchases["non_steam"] += 1
 
     reviewers: list[tuple[str, int, str, str]] = []
     for r in reviews:

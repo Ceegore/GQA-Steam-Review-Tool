@@ -49,8 +49,18 @@ class BatchDumpDialog:
         self._build()
 
     def _build(self) -> None:
+        # R32-1: replace the type-narrowing ``assert top is not None``
+        # with an early-return guard. ``assert`` is stripped under
+        # ``python -O``, so the old form would silently no-op and
+        # the next ``top.method(...)`` call would raise
+        # ``AttributeError: 'NoneType' object has no attribute 'X'``
+        # if a future refactor ever called ``_build()`` before
+        # ``open()`` had a chance to assign ``self._top``. The
+        # early-return pattern is also clearer in intent ("nothing
+        # to do if the toplevel isn't there yet").
         top = self._top
-        assert top is not None
+        if top is None:
+            return
 
         ctk.CTkLabel(
             top, text="Queue App IDs (one per line)",

@@ -85,8 +85,12 @@ class HelpDialog:
         self._build()
 
     def _build(self) -> None:
+        # R32-3: replace the type-narrowing ``assert top is not None``
+        # with an early-return guard (see popup_batch_dump for the
+        # full reasoning — ``assert`` is stripped under ``python -O``).
         top = self._top
-        assert top is not None
+        if top is None:
+            return
 
         frame = ctk.CTkFrame(top)
         frame.pack(fill="both", expand=True, padx=8, pady=8)

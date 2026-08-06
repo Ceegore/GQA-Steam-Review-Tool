@@ -160,7 +160,20 @@ class TabActions:
 
     def quick_view_negatives(self) -> None:
         reviews = getattr(self.master, "reviews", []) or []
-        negs = [r for r in reviews if r.get("voted_up") is False]
+        # R32-16: filter to negative reviews by truthiness rather
+        # than ``is False``. The Steam API can return
+        # ``voted_up`` as ``0``, ``""``, ``"false"``, or
+        # ``None`` for negative recommendations — the old
+        # singleton check only matched the bool ``False``, so
+        # any other falsy value (e.g. ``0`` from a CSV
+        # round-trip or a third-party aggregator) was
+        # silently excluded from the negatives list. Every
+        # other consumer in the codebase (e.g. the per-language
+        # exporter, the markdown helpers, the review analyzer)
+        # already uses ``if r.get("voted_up")`` /
+        # ``not r.get("voted_up")`` — this site was the lone
+        # inconsistency.
+        negs = [r for r in reviews if not r.get("voted_up")]
         if not negs:
             self._log("No negative reviews to view.")
             return

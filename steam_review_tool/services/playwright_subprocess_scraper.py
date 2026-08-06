@@ -327,7 +327,18 @@ def scrape_reviews_subprocess(
             pass
 
         cancelled = False
-        assert proc.stdout is not None
+        # R32-9: replace the type-narrowing ``assert proc.stdout is
+        # not None`` with an early-return guard. ``proc.stdout`` is
+        # assigned from ``subprocess.PIPE`` (see line ~316) so the
+        # assertion is normally true — the early-return is purely
+        # defensive in case a future refactor drops the PIPE wiring.
+        # Same lesson as the popup R32 fixes: ``assert`` is stripped
+        # under ``python -O``, so the type-narrowing is gone in
+        # optimised builds and the next ``proc.stdout.__iter__`` call
+        # would raise ``AttributeError: 'NoneType' object is not
+        # iterable`` rather than a clean "nothing to do" exit.
+        if proc.stdout is None:
+            return []
         for raw in proc.stdout:
             line = raw.strip()
             if not line:

@@ -202,9 +202,14 @@ class PlaywrightTabController(ActionStateMixin):
             self._log_box.insert("end", msg + "\n")
             self._log_box.see("end")
             self._log_box.configure(state="disabled")
-        except Exception as exc:
-            if "invalid command name" not in str(exc):
-                raise
+        # R32-11: same fix as ``tab_api.log`` (R32-10) — narrow the
+        # broad ``except Exception`` + "invalid command name"
+        # string-filter to ``except tk.TclError``. String-matching
+        # on the exception message is fragile and would also miss
+        # other Tcl error variants (e.g. "bad window path name")
+        # emitted when a destroyed widget is still referenced.
+        except tk.TclError:
+            pass
 
     def _clear_log(self) -> None:
         if self._log_box is None:

@@ -185,9 +185,20 @@ class ApiTabController(ActionStateMixin):
             self._log_box.insert("end", msg + "\n")
             self._log_box.see("end")
             self._log_box.configure(state="disabled")
-        except Exception as exc:
-            if "invalid command name" not in str(exc):
-                raise
+        # R32-10: narrow the broad ``except Exception`` with a
+        # string-message filter to ``except tk.TclError``. The
+        # previous ``if "invalid command name" not in str(exc): raise``
+        # was a fragile substitute for the proper type — the
+        # "invalid command name" text is the canonical Tcl error
+        # emitted when a destroyed widget is still referenced, so
+        # the right class is ``tk.TclError`` (mirrors the R25 widget-op
+        # narrowing in 31 sites). String-matching on the exception
+        # message would also miss other Tcl error variants (e.g.
+        # "bad window path name") and would catch unrelated
+        # non-Tk exceptions that happen to contain the substring
+        # by coincidence.
+        except tk.TclError:
+            pass
 
     def _clear_log(self) -> None:
         if self._log_box is None:

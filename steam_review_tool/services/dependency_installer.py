@@ -7,6 +7,7 @@ text widget without coupling.
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -107,9 +108,27 @@ def install_playwright(
             log_cb("pip missing in target Python, bootstrapping from get-pip.py…")
             try:
                 tmp = Path(tempfile.gettempdir()) / "get-pip.py"
-                urllib.request.urlretrieve(
-                    "https://bootstrap.pypa.io/get-pip.py", str(tmp),
-                )
+                # R32-12: bound the network call with a 30s socket
+                # timeout. ``urllib.request.urlretrieve`` defaults to
+                # ``socket._GLOBAL_DEFAULT_TIMEOUT`` which is
+                # ``None`` (block forever) — on a slow or stuck
+                # connection the install thread would hang
+                # indefinitely and the GUI's "Installing…" spinner
+                # would never resolve. 30s is generous for a
+                # ~2 MB get-pip.py download and matches the order
+                # of magnitude of the surrounding subprocess
+                # timeouts (120s, 300s, 600s). Restored to the
+                # previous default in a ``finally`` so a long
+                # timeout in this branch doesn't leak into
+                # unrelated socket operations later in the process.
+                prev_timeout = socket.getdefaulttimeout()
+                socket.setdefaulttimeout(30.0)
+                try:
+                    urllib.request.urlretrieve(
+                        "https://bootstrap.pypa.io/get-pip.py", str(tmp),
+                    )
+                finally:
+                    socket.setdefaulttimeout(prev_timeout)
                 try:
                     boot = subprocess.run(
                         [python_exe, str(tmp)],

@@ -198,7 +198,17 @@ def render_review(idx: int, r: dict[str, Any], keyword_list: Optional[list[Any]]
         purchase_badge = "✅ verified"
     elif r.get("received_for_free"):
         purchase_badge = "🎁 free"
-    elif r.get("steam_purchase") is False:
+    # R32-14: classify the "key (not purchased)" case by
+    # truthiness rather than ``is False``. The Steam API can
+    # return ``steam_purchase`` as ``0``, ``""``, ``"false"``,
+    # or ``None`` for non-Steam-purchased reviews — the old
+    # singleton check only matched the bool ``False``, so any
+    # other falsy value fell through to the "— / unknown" badge
+    # instead of the correct "🔑 key" badge. Using ``not
+    # bool(r.get("steam_purchase"))`` collapses all falsy
+    # representations to one branch. Same fix-shape as the
+    # per-language exporter (R32-15).
+    elif not bool(r.get("steam_purchase")):
         purchase_badge = "🔑 key"
     else:
         purchase_badge = "—"
